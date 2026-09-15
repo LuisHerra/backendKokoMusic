@@ -1,0 +1,1079 @@
+[
+  {
+    "query": "Rick Astley Never Gonna Give You Up official video",
+    "category": "popular",
+    "id": "dQw4w9WgXcQ",
+    "matchedTitle": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130677
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130677
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130677
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Daft Punk Harder Better Faster Stronger official audio",
+    "category": "popular",
+    "id": "yydNF8tuVmU",
+    "matchedTitle": "Daft Punk - Harder, Better, Faster, Stronger (Official Audio)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130646
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130646
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130646
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "The Weeknd Blinding Lights official video",
+    "category": "popular",
+    "id": "4NRXx6U8ABQ",
+    "matchedTitle": "The Weeknd - Blinding Lights (Official Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130445
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130445
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130445
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Queen Bohemian Rhapsody official video",
+    "category": "popular",
+    "id": "fJ9rUzIMcZQ",
+    "matchedTitle": "Queen – Bohemian Rhapsody (Official Video Remastered)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 148695
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 148695
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 148695
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Ed Sheeran Shape of You official video",
+    "category": "popular",
+    "id": "JGwWNGJdvx8",
+    "matchedTitle": "Ed Sheeran - Shape of You (Official Music Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130613
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130613
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130613
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Billie Eilish bad guy official video",
+    "category": "popular",
+    "id": "DyDfgMOUjCI",
+    "matchedTitle": "Billie Eilish - bad guy",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130383
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130383
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130383
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Bad Bunny Titi Me Pregunto",
+    "category": "popular",
+    "id": "Cr8K88UcO0s",
+    "matchedTitle": "Bad Bunny - Tití Me Preguntó (Video Oficial) | Un Verano Sin Ti",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130771
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130771
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130771
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Fontaines D.C. Boys in the Better Land",
+    "category": "nicho",
+    "id": "abxGaMCDhmU",
+    "matchedTitle": "Fontaines D.C. - Boys In The Better Land (Official Audio)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130692
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130692
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130692
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "black midi Sugar/Tzu",
+    "category": "nicho",
+    "id": "8D3TrpQ_nFo",
+    "matchedTitle": "black midi - Sugar/Tzu",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130516
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130516
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130516
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Black Country New Road Sunglasses",
+    "category": "nicho",
+    "id": "7t-9rgpzU6A",
+    "matchedTitle": "Black Country New Road - 'Sunglasses' (Official Lyric Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130819
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130819
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130819
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Squid Narrator official video",
+    "category": "nicho",
+    "id": "__zmVSREvxY",
+    "matchedTitle": "Squid - Narrator (Official Video) ft. Martha Skye Murphy",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130834
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130834
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130834
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Wet Leg Chaise Longue official video",
+    "category": "nicho",
+    "id": "Zd9jeJk2UHQ",
+    "matchedTitle": "Wet Leg - Chaise Longue (Official Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130471
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130471
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130471
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Jockstrap Concrete Over Water",
+    "category": "nicho",
+    "id": "FfXwm3jwVbI",
+    "matchedTitle": "Jockstrap - 'Concrete Over Water' (Official Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130655
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130655
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130655
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "benny blanco Selena Gomez Becky G Te Olvido La La",
+    "category": "reciente",
+    "id": "XGKJxb2b3ZI",
+    "matchedTitle": "benny blanco, Selena Gomez, Becky G - Te Olvido (La La)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130549
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130549
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130549
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Cardi B AH HA official video",
+    "category": "reciente",
+    "id": "I-5e_J3LWS8",
+    "matchedTitle": "Cardi B - AH HA [Video Musical Oficial]",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130611
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130611
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130611
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Ellie Goulding 4 Seasons official video",
+    "category": "reciente",
+    "id": "LgHfFlBjgNg",
+    "matchedTitle": "Ellie Goulding - Four Seasons | Later... with Jools Holland (2026)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130557
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130557
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130557
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Olivia Rodrigo stupid song",
+    "category": "reciente",
+    "id": "Rt9tW3cMLhI",
+    "matchedTitle": "Olivia Rodrigo - stupid song (Official Music Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130517
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130517
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130517
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Madonna Love Sensation 2026",
+    "category": "reciente",
+    "id": "88fD-UtG_yo",
+    "matchedTitle": "Madonna - Love Sensation (Official Visualizer)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130554
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130554
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130554
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Beyonce MORNING DEW DONK",
+    "category": "reciente",
+    "id": "Mv5f9Q2LJYM",
+    "matchedTitle": "Beyoncé - MORNING DEW (DONK)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130859
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130859
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130859
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "The Beatles Hey Jude official video",
+    "category": "viejo",
+    "id": "A_MjCqQoLLA",
+    "matchedTitle": "The Beatles - The Beatles - Hey Jude (Official Music Video) [Remastered 2015]",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 132186
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 132186
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 132186
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Fleetwood Mac Dreams official video",
+    "category": "viejo",
+    "id": "Y3ywicffOj4",
+    "matchedTitle": "Fleetwood Mac - Dreams (Official Music Video) [4K]",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130660
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130660
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130660
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Michael Jackson Billie Jean official video",
+    "category": "viejo",
+    "id": "Zi_XLOBDo_Y",
+    "matchedTitle": "Michael Jackson - Billie Jean (Official Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130796
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130796
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130796
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "ABBA Dancing Queen official video",
+    "category": "viejo",
+    "id": "xFrGuyw1V8s",
+    "matchedTitle": "ABBA - Dancing Queen (Official Music Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130647
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130647
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130647
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Nirvana Smells Like Teen Spirit official video",
+    "category": "viejo",
+    "id": "hTWKbfoikeg",
+    "matchedTitle": "Nirvana - Smells Like Teen Spirit (Official Music Video)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130554
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130554
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130554
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "David Bowie Heroes official video",
+    "category": "viejo",
+    "id": "lXgkuM2NhYI",
+    "matchedTitle": "David Bowie - \"Heroes\" (Official Video) [HD]",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130526
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130526
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130526
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Cardi B WAP official video",
+    "category": "riesgo",
+    "id": "hsm4poTWjMs",
+    "matchedTitle": "Cardi B - WAP feat. Megan Thee Stallion [Official Music Video]",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130575
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130575
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130575
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Eminem Rap God official video",
+    "category": "riesgo",
+    "id": "XbGs_qK2PQA",
+    "matchedTitle": "Eminem - Rap God (Explicit)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130704
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130704
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130704
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Kendrick Lamar Not Like Us official video",
+    "category": "riesgo",
+    "id": "H58vbez_m4E",
+    "matchedTitle": "Kendrick Lamar - Not Like Us",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130805
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130805
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130805
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Rammstein Pussy official video",
+    "category": "riesgo",
+    "id": "qkO6iBwcoe4",
+    "matchedTitle": "Rammstein - ''Pussy'' - (OFFICIAL VIDEO) -  [FIXED AUDIO] - (English CC)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": false,
+        "error": "Streaming data not available"
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "Streaming data not available"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": false,
+        "error": "Streaming data not available"
+      },
+      {
+        "client": "MWEB",
+        "success": false,
+        "error": "Streaming data not available"
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  },
+  {
+    "query": "Death Grips Guillotine full video",
+    "category": "riesgo",
+    "id": "Orlbo9WkZ2E",
+    "matchedTitle": "Death Grips - Guillotine (It goes Yah)",
+    "results": [
+      {
+        "client": "IOS",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130622
+      },
+      {
+        "client": "ANDROID",
+        "success": false,
+        "error": "No valid URL to decipher"
+      },
+      {
+        "client": "YTMUSIC",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130622
+      },
+      {
+        "client": "MWEB",
+        "success": true,
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "bitrate": 130622
+      },
+      {
+        "client": "WEB_CREATOR",
+        "success": false,
+        "error": "Streaming data not available"
+      }
+    ]
+  }
+]
