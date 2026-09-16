@@ -1,12 +1,14 @@
-name: Keep Render awake
+name: Keep Render awake (excepto de madrugada)
 
-# Corre cada 10 minutos — por debajo del umbral de 15 min de inactividad
-# de Render, para que el servicio nunca se considere "idle" y nunca
-# dispare el cold start.
+# Corre cada 10 minutos, pero solo pinguea si NO estamos en la ventana de
+# sueño (03:00-05:30 hora de Madrid, sin usuarios). Fuera de esa ventana,
+# actúa como el keep-alive de siempre. Dentro de ella, no hace nada — Render
+# lo deja dormir solo tras 15 min sin tráfico, ahorrando horas del free tier.
 #
-# Nota: GitHub no garantiza que el cron corra exactamente a horario (puede
-# demorar unos minutos bajo carga alta de la plataforma), por eso 10 min
-# y no 14 — deja margen.
+# El chequeo de hora usa TZ='Europe/Madrid' en el propio paso, así que
+# ajusta el cambio de horario de verano/invierno automáticamente (los
+# runners de Ubuntu traen la base de datos de zonas horarias completa) —
+# no hace falta tocar nada dos veces al año.
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -16,5 +18,20 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping /health
-        run: curl -sf https://backendkokomusic.onrender.com/health
+      - name: Ping /health salvo en la ventana de sueño
+        run: |
+          HOUR_MADRID=$(TZ='Europe/Madrid' date +%H)
+          MIN_MADRID=$(TZ='Europe/Madrid' date +%M)
+          # 10#... fuerza base 10, para que "08"/"09" no se interpreten como octal inválido
+          MINUTES_SINCE_MIDNIGHT=$((10#$HOUR_MADRID * 60 + 10#$MIN_MADRID))
+
+          SLEEP_START=180  # 03:00
+          SLEEP_END=330    # 05:30
+
+          if [ "$MINUTES_SINCE_MIDNIGHT" -ge "$SLEEP_START" ] && [ "$MINUTES_SINCE_MIDNIGHT" -lt "$SLEEP_END" ]; then
+            echo "Dentro de la ventana de sueño (03:00-05:30 Madrid, hora actual $HOUR_MADRID:$MIN_MADRID) — no pingueamos."
+            exit 0
+          fi
+
+          echo "Fuera de la ventana de sueño (hora actual $HOUR_MADRID:$MIN_MADRID Madrid) — pingueando."
+          curl -sf https://backendkokomusic.onrender.com/health
