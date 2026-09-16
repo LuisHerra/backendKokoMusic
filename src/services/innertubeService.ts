@@ -37,6 +37,17 @@ export interface ResolvedStream {
   expiresAt: number; // Unix ms, extraído del parámetro `expire=` de la URL
   source: 'innertube';
   client: string; // qué cliente InnerTube resolvió (para depuración/métricas)
+  /**
+   * Desglose de tiempos en ms — TEMPORAL, para diagnosticar si la lentitud
+   * viene de la espera de red a YouTube o del descifrado (CPU). No es parte
+   * del contrato estable de la API, prefijo `_` a propósito.
+   */
+  _timing?: {
+    innertubeReadyMs: number; // cuánto tardó tener la sesión InnerTube lista (0 si ya estaba caliente)
+    getBasicInfoMs: number; // la llamada de red a InnerTube en sí
+    decipherMs: number; // ejecución de la JS ofuscada (CPU) — 0 si el cliente no la necesitó
+    totalMs: number;
+  };
 }
 
 export interface SearchResultItem {
@@ -114,11 +125,16 @@ function extractExpiryMs(url: string): number {
 export async function resolveAudioStream(
   videoId: string
 ): Promise<ResolvedStream | null> {
+  const t0 = performance.now();
+  const wasAlreadyWarm = innertubeInstance !== null;
   const yt = await getInnertube();
+  const tInnertubeReady = performance.now();
 
   for (const client of CLIENT_ORDER) {
     try {
+      const tClientStart = performance.now();
       const info = await yt.getBasicInfo(videoId, { client });
+      const tInfo = performance.now();
 
       const format = info.chooseFormat({
         type: 'audio',
@@ -132,10 +148,25 @@ export async function resolveAudioStream(
 
       // decipher() es async en youtubei.js 17.x
       const url = await format.decipher(yt.session.player);
+      const tDecipher = performance.now();
+
       if (!url) {
         console.warn(`[innertube:${client}] no se pudo descifrar URL para ${videoId}`);
         continue;
       }
+
+      const timing = {
+        innertubeReadyMs: wasAlreadyWarm ? 0 : Math.round(tInnertubeReady - t0),
+        getBasicInfoMs: Math.round(tInfo - tClientStart),
+        decipherMs: Math.round(tDecipher - tInfo),
+        totalMs: Math.round(tDecipher - t0),
+      };
+
+      console.log(
+        `[timing] resolveAudioStream(${videoId}, ${client}): ` +
+          `innertubeReady=${timing.innertubeReadyMs}ms getBasicInfo=${timing.getBasicInfoMs}ms ` +
+          `decipher=${timing.decipherMs}ms total=${timing.totalMs}ms`
+      );
 
       return {
         url,
@@ -145,6 +176,7 @@ export async function resolveAudioStream(
         expiresAt: extractExpiryMs(url),
         source: 'innertube',
         client,
+        _timing: timing,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -277,6 +309,12 @@ export interface ArtistProfile {
   topSongs: ArtistTrack[];
   albums: ArtistAlbum[];
   relatedArtists: ArtistSearchResult[];
+  /** Igual que en ResolvedStream — temporal, para diagnóstico. */
+  _timing?: {
+    searchMs: number;
+    getArtistMs: number;
+    totalMs: number;
+  };
 }
 
 /**
@@ -396,7 +434,25 @@ export async function getArtistProfile(artistId: string): Promise<ArtistProfile>
  * encuentra ningún artista que matchee.
  */
 export async function lookupArtist(query: string): Promise<ArtistProfile | null> {
+  const t0 = performance.now();
   const candidates = await searchArtists(query);
+  const tSearch = performance.now();
+
   if (candidates.length === 0) return null;
-  return getArtistProfile(candidates[0].id);
+
+  const profile = await getArtistProfile(candidates[0].id);
+  const tProfile = performance.now();
+
+  const timing = {
+    searchMs: Math.round(tSearch - t0),
+    getArtistMs: Math.round(tProfile - tSearch),
+    totalMs: Math.round(tProfile - t0),
+  };
+
+  console.log(
+    `[timing] lookupArtist("${query}"): search=${timing.searchMs}ms ` +
+      `getArtist=${timing.getArtistMs}ms total=${timing.totalMs}ms`
+  );
+
+  return { ...profile, _timing: timing };
 }

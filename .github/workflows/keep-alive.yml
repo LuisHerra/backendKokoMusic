@@ -1,0 +1,20 @@
+name: Keep Render awake
+
+# Corre cada 10 minutos — por debajo del umbral de 15 min de inactividad
+# de Render, para que el servicio nunca se considere "idle" y nunca
+# dispare el cold start.
+#
+# Nota: GitHub no garantiza que el cron corra exactamente a horario (puede
+# demorar unos minutos bajo carga alta de la plataforma), por eso 10 min
+# y no 14 — deja margen.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {} # permite dispararlo a mano desde la pestaña Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: curl -sf https://backendkokomusic.onrender.com/health

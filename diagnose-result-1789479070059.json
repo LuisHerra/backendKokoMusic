@@ -1,0 +1,230 @@
+[
+  {
+    "query": "Rick Astley Never Gonna Give You Up official video",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Daft Punk Harder Better Faster Stronger official audio",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "The Weeknd Blinding Lights official video",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Queen Bohemian Rhapsody official video",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Ed Sheeran Shape of You official video",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Billie Eilish bad guy official video",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Bad Bunny Titi Me Pregunto",
+    "category": "popular",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Fontaines D.C. Boys in the Better Land",
+    "category": "nicho",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "black midi Sugar/Tzu",
+    "category": "nicho",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Black Country New Road Sunglasses",
+    "category": "nicho",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Squid Narrator official video",
+    "category": "nicho",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Wet Leg Chaise Longue official video",
+    "category": "nicho",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Jockstrap Concrete Over Water",
+    "category": "nicho",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "benny blanco Selena Gomez Becky G Te Olvido La La",
+    "category": "reciente",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Cardi B AH HA official video",
+    "category": "reciente",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Ellie Goulding 4 Seasons official video",
+    "category": "reciente",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Olivia Rodrigo stupid song",
+    "category": "reciente",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Madonna Love Sensation 2026",
+    "category": "reciente",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Beyonce MORNING DEW DONK",
+    "category": "reciente",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "The Beatles Hey Jude official video",
+    "category": "viejo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Fleetwood Mac Dreams official video",
+    "category": "viejo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Michael Jackson Billie Jean official video",
+    "category": "viejo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "ABBA Dancing Queen official video",
+    "category": "viejo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Nirvana Smells Like Teen Spirit official video",
+    "category": "viejo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "David Bowie Heroes official video",
+    "category": "viejo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Cardi B WAP official video",
+    "category": "riesgo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Eminem Rap God official video",
+    "category": "riesgo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Kendrick Lamar Not Like Us official video",
+    "category": "riesgo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Rammstein Pussy official video",
+    "category": "riesgo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Death Grips Guillotine full video",
+    "category": "riesgo",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Stromae Alors on danse clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Stromae Papaoutai clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Angèle Balance ton quoi clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Aya Nakamura Djadja clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Édith Piaf Non je ne regrette rien",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "Christine and the Queens Saint Claude clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "IAM Nés en 77 clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  },
+  {
+    "query": "PNL Au DD clip officiel",
+    "category": "francés",
+    "searchFailed": true,
+    "error": "fetch failed"
+  }
+]
