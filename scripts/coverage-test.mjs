@@ -12,7 +12,7 @@
  */
 
 import { TRACKS } from './tracks.mjs';
-import { sleep, warmup, searchFirstResult, purgeCache } from './lib.mjs';
+import { sleep, warmup, searchFirstResult, purgeCache, withKey } from './lib.mjs';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:7860';
 const DELAY_MS = 400;
@@ -50,7 +50,7 @@ async function processTrack(track) {
   await purgeCache(BASE_URL, id);
 
   try {
-    const res = await fetch(`${BASE_URL}/api/stream/${id}/resolve`);
+    const res = await fetch(withKey(`${BASE_URL}/api/stream/${id}/resolve`));
     const elapsedMs = Math.round(performance.now() - start);
     const body = await res.json().catch(() => null);
 

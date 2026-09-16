@@ -15,7 +15,7 @@
  */
 
 import { TRACKS } from './tracks.mjs';
-import { sleep, warmup, searchFirstResult, purgeCache } from './lib.mjs';
+import { sleep, warmup, searchFirstResult, purgeCache, withKey } from './lib.mjs';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:7860';
 const DELAY_MS = 500; // cada diagnóstico ya dispara ~5 llamadas internas, dejamos más aire
@@ -35,7 +35,7 @@ async function diagnoseOne(track) {
   await purgeCache(BASE_URL, found.id);
 
   try {
-    const res = await fetch(`${BASE_URL}/api/stream/${found.id}/diagnose`);
+    const res = await fetch(withKey(`${BASE_URL}/api/stream/${found.id}/diagnose`));
     const body = await res.json().catch(() => null);
     return {
       ...track,

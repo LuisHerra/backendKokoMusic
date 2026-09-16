@@ -243,3 +243,160 @@ export async function searchTracks(query: string): Promise<SearchResultItem[]> {
     thumbnail: v.thumbnails?.[0]?.url,
   }));
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Perfil de artista (vía YouTube Music, no la búsqueda de video normal)
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ArtistSearchResult {
+  id: string;
+  name: string;
+  thumbnail?: string;
+  subscribers?: string;
+}
+
+export interface ArtistTrack {
+  id: string;
+  title: string;
+  thumbnail?: string;
+  durationSeconds?: number;
+}
+
+export interface ArtistAlbum {
+  id?: string;
+  title: string;
+  year?: string;
+  thumbnail?: string;
+}
+
+export interface ArtistProfile {
+  id: string;
+  name: string;
+  description?: string;
+  thumbnail?: string;
+  topSongs: ArtistTrack[];
+  albums: ArtistAlbum[];
+  relatedArtists: ArtistSearchResult[];
+}
+
+/**
+ * Busca artistas específicamente (no videos/canciones sueltas) vía la API
+ * de YouTube Music. Es lo que permite reconocer que "rnboi" es un artista
+ * y no solo un texto de búsqueda de video.
+ *
+ * NOTA: la forma exacta de la respuesta de yt.music.search() puede variar
+ * según cómo YouTube arme el shelf de resultados para un query dado — acá
+ * se cubre el caso más común (un MusicShelf con MusicResponsiveListItem
+ * adentro, filtrados por item_type === 'artist'). Si en tus pruebas reales
+ * ves que search.contents viene vacío pero la búsqueda sí encontró algo,
+ * hacé un console.log(JSON.stringify(search, null, 2)) una vez para ver la
+ * forma real y ajustar la extracción — no lo pude verificar contra YouTube
+ * real desde este entorno.
+ */
+export async function searchArtists(query: string): Promise<ArtistSearchResult[]> {
+  const yt = await getInnertube();
+  const search = await yt.music.search(query, { type: 'artist' });
+
+  const items: Array<Record<string, unknown>> = [];
+  for (const section of search.contents ?? []) {
+    const contents = (section as unknown as { contents?: unknown[] }).contents;
+    if (Array.isArray(contents)) {
+      items.push(...(contents as Array<Record<string, unknown>>));
+    }
+  }
+
+  return items
+    .filter((item) => item.item_type === 'artist' && typeof item.id === 'string')
+    .slice(0, 10)
+    .map((item) => {
+      const thumbs = (item as { thumbnails?: Array<{ url: string }> }).thumbnails;
+      return {
+        id: item.id as string,
+        name: (item.name as string) ?? (item.title as string) ?? '(sin nombre)',
+        thumbnail: thumbs?.[0]?.url,
+        subscribers: item.subscribers as string | undefined,
+      };
+    });
+}
+
+/**
+ * Trae el perfil completo de un artista: bio, foto, top canciones,
+ * discografía y artistas relacionados. Clasifica el contenido de cada
+ * "sección" del perfil por item_type ('song' | 'album' | 'artist') en vez
+ * de por el texto del título de la sección — así no depende del idioma
+ * ("Top songs" vs "Canciones principales" según el `lang` configurado).
+ */
+export async function getArtistProfile(artistId: string): Promise<ArtistProfile> {
+  const yt = await getInnertube();
+  const artist = await yt.music.getArtist(artistId);
+
+  const header = artist.header as unknown as {
+    title?: { text?: string };
+    description?: { text?: string };
+    thumbnail?: { contents?: Array<{ url: string }> };
+  } | null;
+
+  const topSongs: ArtistTrack[] = [];
+  const albums: ArtistAlbum[] = [];
+  const relatedArtists: ArtistSearchResult[] = [];
+
+  for (const section of artist.sections ?? []) {
+    const contents =
+      (section as unknown as { contents?: Array<Record<string, unknown>> }).contents ?? [];
+
+    for (const item of contents) {
+      const itemType = item.item_type as string | undefined;
+      const rawTitle = item.title as { text?: string } | string | undefined;
+      const title =
+        typeof rawTitle === 'string' ? rawTitle : rawTitle?.text ?? '(sin título)';
+      const thumbUrl =
+        (item as { thumbnails?: Array<{ url: string }> }).thumbnails?.[0]?.url ??
+        (item as { thumbnail?: Array<{ url: string }> }).thumbnail?.[0]?.url;
+
+      if (itemType === 'song' && topSongs.length < 10 && typeof item.id === 'string') {
+        topSongs.push({
+          id: item.id,
+          title,
+          thumbnail: thumbUrl,
+          durationSeconds: (item.duration as { seconds?: number } | undefined)?.seconds,
+        });
+      } else if (itemType === 'album' && albums.length < 20) {
+        albums.push({
+          id: item.id as string | undefined,
+          title,
+          year: item.year as string | undefined,
+          thumbnail: thumbUrl,
+        });
+      } else if (itemType === 'artist' && relatedArtists.length < 10 && typeof item.id === 'string') {
+        relatedArtists.push({
+          id: item.id,
+          name: (item.name as string) ?? title,
+          thumbnail: thumbUrl,
+          subscribers: item.subscribers as string | undefined,
+        });
+      }
+    }
+  }
+
+  return {
+    id: artistId,
+    name: header?.title?.text ?? '(desconocido)',
+    description: header?.description?.text,
+    thumbnail: header?.thumbnail?.contents?.[0]?.url,
+    topSongs,
+    albums,
+    relatedArtists,
+  };
+}
+
+/**
+ * El atajo directo para el caso de uso que pediste: un query de texto tipo
+ * "rnboi" → perfil del artista, en una sola llamada (busca + toma el
+ * primer candidato + trae el perfil completo). Devuelve null si no
+ * encuentra ningún artista que matchee.
+ */
+export async function lookupArtist(query: string): Promise<ArtistProfile | null> {
+  const candidates = await searchArtists(query);
+  if (candidates.length === 0) return null;
+  return getArtistProfile(candidates[0].id);
+}

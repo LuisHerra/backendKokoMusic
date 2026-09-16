@@ -102,17 +102,152 @@ dice, específicamente, cuántas veces tuviste un plan B real cuando IOS falló.
 node scripts/diagnose-clients.mjs
 ```
 
-## Cómo desplegar en Hugging Face Spaces
+## Despliegue en Render.com — gratis, recomendado
 
-1. Crear un Space nuevo → SDK: **Docker** (no Gradio/Streamlit).
-2. Subir estos archivos (o conectar el repo de GitHub del proyecto).
-3. Hugging Face detecta el `Dockerfile` automáticamente y expone el puerto `7860`
-   (ya configurado en `ENV PORT=7860`).
-4. Una vez desplegado, probar los mismos `curl` de arriba maqueando la URL del Space:
+Hugging Face cambió silenciosamente su política: Docker Spaces con CPU básica
+ahora exige suscripción PRO ($9/mes). Render.com es la alternativa que no pide
+tarjeta y usa el mismo `Dockerfile` que ya tenés, sin cambiar una línea de
+código (tu servidor ya lee `process.env.PORT`, que es justo lo que Render
+inyecta automáticamente).
+
+**Contra a tener en cuenta**: el plan gratis "duerme" el servicio tras 15
+minutos sin tráfico, y el primer request después de eso tarda ~1 minuto en
+responder (cold start). Para uso personal esporádico es un precio razonable
+a cambio de $0/mes.
+
+### 1. Subir el proyecto a GitHub (Render deploya desde ahí)
 
 ```bash
-curl -s "https://TU-USUARIO-TU-SPACE.hf.space/api/stream/dQw4w9WgXcQ/resolve" | jq
+cd kokomusic-lite
+git init
+git add .
+git commit -m "Deploy inicial"
 ```
+Creá un repo nuevo en [github.com/new](https://github.com/new) (puede ser
+privado) y seguí las instrucciones que te da GitHub para conectar tu carpeta
+local (`git remote add origin ...` + `git push`).
+
+### 2. Crear el Web Service en Render
+
+1. Entrá a [dashboard.render.com](https://dashboard.render.com) (podés
+   registrarte con tu cuenta de GitHub directamente).
+2. **New** → **Web Service** → conectá el repo que acabás de crear.
+3. Render detecta el `Dockerfile` solo — dejá **Runtime: Docker**.
+4. **Instance Type**: **Free**.
+5. Antes de crear, andá a **Environment** y agregá (marcá "Secret" si el
+   toggle está disponible):
+
+| Key | Value |
+|---|---|
+| `API_KEY` | Tu string random (mismo concepto que antes) |
+| `YOUTUBE_COOKIE` | Opcional, tu cookie de sesión |
+
+6. **Create Web Service**. El primer build tarda unos minutos — mirá la
+   pestaña **Logs**.
+
+### 3. Probar
+
+Render te da una URL tipo `https://kokomusic-lite.onrender.com`:
+
+```bash
+curl -s https://kokomusic-lite.onrender.com/health
+curl -s "https://kokomusic-lite.onrender.com/api/session?key=TU_API_KEY"
+```
+
+Si el servicio estaba dormido, la primera respuesta va a tardar — es
+esperado, no es un error.
+
+### 4. Comparar cobertura local vs. cloud
+
+```powershell
+$env:BASE_URL="https://kokomusic-lite.onrender.com"
+$env:API_KEY="TU_API_KEY"
+node scripts/diagnose-clients.mjs
+node scripts/coverage-test.mjs
+```
+
+## Alternativa: Hugging Face Spaces (requiere PRO, $9/mes)
+
+Si preferís evitar el cold start de Render y no te molesta pagar, el mismo
+`Dockerfile` funciona igual en HF Spaces una vez que tengas PRO activo.
+Los pasos son los mismos que se detallan abajo.
+
+## Despliegue en Hugging Face Spaces — paso a paso
+
+### 1. Crear el Space
+
+1. Andá a [huggingface.co/new-space](https://huggingface.co/new-space) (necesitás una cuenta de Hugging Face, gratis).
+2. **SDK**: elegí **Docker** (no Gradio/Streamlit/otro).
+3. **Visibilidad**: podés dejarlo en **Public**. No hace falta ponerlo en
+   Private — la protección real la da la `API_KEY` propia que configuramos
+   abajo, que además funciona en un `<audio src="...">` (un Space privado de
+   HF exige un header `Authorization`, que no podés poner ahí).
+4. **Hardware**: **CPU basic (free)** alcanza de sobra para esto.
+5. Creá el Space.
+
+### 2. Configurar los secretos (¡antes de subir código!)
+
+En tu Space → **Settings** → **Variables and Secrets** → **New secret**,
+agregá:
+
+| Nombre | Valor | Obligatorio |
+|---|---|---|
+| `API_KEY` | Un string random que inventes vos (ej. generá uno con `openssl rand -hex 16`) | Sí — sin esto tu backend queda abierto a cualquiera en internet |
+| `YOUTUBE_COOKIE` | Tu cookie de sesión de YouTube, si la vas a usar | Opcional |
+
+**Nunca pongas estos valores directamente en el código ni los subas a git** —
+por eso son "Secrets" y no "Variables": no se muestran ni siquiera a vos una
+vez guardados, y no quedan en el historial del repo.
+
+### 3. Subir el código
+
+**Opción A — más simple, sin git**: en la página del Space, pestaña
+**Files** → **Add file** → subís todos los archivos del proyecto manteniendo
+la estructura de carpetas (`src/`, `package.json`, `Dockerfile`, etc.) —
+**no subas `node_modules` ni `dist`**, el Dockerfile los genera solo.
+
+**Opción B — con git** (mejor si vas a iterar seguido):
+```bash
+git clone https://huggingface.co/spaces/TU-USUARIO/TU-SPACE
+cd TU-SPACE
+# copiá adentro todos los archivos del proyecto (menos node_modules y dist)
+git add .
+git commit -m "Deploy inicial"
+git push
+```
+
+### 4. Esperar el build y probar
+
+El Space detecta el `Dockerfile` automáticamente y empieza a buildear (mirá
+la pestaña **Logs** para seguir el progreso — la primera vez tarda unos
+minutos). Cuando diga **Running**:
+
+```bash
+# Salud básica (no necesita key)
+curl -s https://TU-USUARIO-TU-SPACE.hf.space/health
+
+# Cualquier endpoint /api/* SÍ necesita la key que configuraste como Secret
+curl -s "https://TU-USUARIO-TU-SPACE.hf.space/api/session?key=TU_API_KEY"
+```
+
+### 5. Comparar cobertura local vs. cloud (el dato que realmente importa)
+
+Los mismos scripts que ya usaste sirven para esto — solo apuntalos al Space:
+
+```bash
+# Windows PowerShell
+$env:BASE_URL="https://TU-USUARIO-TU-SPACE.hf.space"
+$env:API_KEY="TU_API_KEY"
+node scripts/diagnose-clients.mjs
+node scripts/coverage-test.mjs
+```
+
+Compará el resumen con el que ya tenés de tu máquina local. Si ves que
+`IOS`/`YTMUSIC`/`MWEB` bajan su tasa de éxito notablemente desde la IP de
+datacenter de Hugging Face, esa es la señal real de que el bloqueo por IP de
+datacenter te está afectando — y ahí sí tendría sentido retomar la idea del
+Raspberry Pi con yt-dlp como fallback. Si se mantienen parecidos, significa
+que para tu volumen de uso personal el datacenter no es un problema práctico.
 
 ## Plan de verificación sugerido (antes de decidir sobre yt-dlp)
 
