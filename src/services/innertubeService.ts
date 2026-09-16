@@ -1,5 +1,6 @@
 import { Innertube, Platform } from 'youtubei.js';
 import type { Types } from 'youtubei.js';
+import { cacheGet, cacheSet } from './cache.js';
 
 type InnerTubeClient = Types.InnerTubeClient;
 
@@ -433,14 +434,62 @@ export async function getArtistProfile(artistId: string): Promise<ArtistProfile>
  * primer candidato + trae el perfil completo). Devuelve null si no
  * encuentra ningún artista que matchee.
  */
-export async function lookupArtist(query: string): Promise<ArtistProfile | null> {
-  const t0 = performance.now();
-  const candidates = await searchArtists(query);
-  const tSearch = performance.now();
+const ARTIST_PROFILE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — la bio/discografía no cambia minuto a minuto
+const ARTIST_QUERY_TTL_MS = 24 * 60 * 60 * 1000; // 24h — mapeo query → artistId
 
+function normalizeArtistQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+/**
+ * Primer paso del lookup: resuelve el query a un candidato (id + nombre +
+ * foto), usando caché de query→id si ya se buscó antes. Esto es justo lo
+ * que se manda como evento "candidate" en el SSE — no espera al perfil
+ * completo.
+ */
+export async function lookupArtistCandidate(query: string): Promise<ArtistSearchResult | null> {
+  const normalized = normalizeArtistQuery(query);
+  const cachedId = cacheGet<string>(`artistQuery:${normalized}`);
+
+  if (cachedId) {
+    const cachedProfile = cacheGet<ArtistProfile>(`artistProfile:${cachedId}`);
+    if (cachedProfile) {
+      return { id: cachedProfile.id, name: cachedProfile.name, thumbnail: cachedProfile.thumbnail };
+    }
+    // Tenemos el id pero el perfil ya venció o se purgó — no hay forma
+    // barata de reconstruir nombre/foto sin buscar de nuevo, así que
+    // caemos al camino normal de búsqueda (caso raro: ambos TTLs son
+    // iguales, así que en la práctica casi siempre coinciden).
+  }
+
+  const candidates = await searchArtists(query);
   if (candidates.length === 0) return null;
 
-  const profile = await getArtistProfile(candidates[0].id);
+  cacheSet(`artistQuery:${normalized}`, candidates[0].id, Date.now() + ARTIST_QUERY_TTL_MS);
+  return candidates[0];
+}
+
+/**
+ * Segundo paso: perfil completo por id, con caché de 24h. En un cache hit
+ * esto es prácticamente instantáneo — elimina el getArtistMs por completo.
+ */
+export async function getArtistProfileCached(artistId: string): Promise<ArtistProfile> {
+  const cached = cacheGet<ArtistProfile>(`artistProfile:${artistId}`);
+  if (cached) return cached;
+
+  const profile = await getArtistProfile(artistId);
+  cacheSet(`artistProfile:${artistId}`, profile, Date.now() + ARTIST_PROFILE_TTL_MS);
+  return profile;
+}
+
+export async function lookupArtist(query: string): Promise<ArtistProfile | null> {
+  const t0 = performance.now();
+  const candidate = await lookupArtistCandidate(query);
+  const tSearch = performance.now();
+
+  if (!candidate) return null;
+
+  const profile = await getArtistProfileCached(candidate.id);
   const tProfile = performance.now();
 
   const timing = {
