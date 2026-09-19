@@ -30,6 +30,32 @@ Platform.shim.eval = async (data: { output: string }) => {
   return new Function(data.output)();
 };
 
+/**
+ * Enruta las peticiones de youtubei.js hacia YouTube a través de un proxy
+ * (residencial u otro) cuando PROXY_URL está configurada. Formato esperado:
+ * "http://usuario:contraseña@host:puerto".
+ *
+ * Motivo: YouTube penaliza fuertemente las IPs de datacenter (como la de
+ * Render) con 403 en /youtubei/v1/player — ver docs/README para el
+ * historial de diagnóstico. Solo afecta a las peticiones de youtubei.js, no
+ * al resto del servidor — mismo patrón de inyección que Platform.shim.eval
+ * de arriba.
+ */
+const proxyUrl = process.env.PROXY_URL;
+if (proxyUrl) {
+  // No sobreescribimos Platform.shim.fetch con el fetch del paquete `undici`
+  // — sus objetos Request/Response viven en un "realm" distinto al fetch
+  // global de Node (que también es undici, pero la instancia bundleada), y
+  // youtubei.js construye sus Request con el global. Mezclarlos da
+  // "Failed to parse URL from [object Request]". En vez de eso, mutamos el
+  // dispatcher GLOBAL: el fetch nativo de Node ya lo respeta sin más cambios.
+  const { ProxyAgent, setGlobalDispatcher } = await import('undici');
+  setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  console.log('[Innertube] Peticiones enrutadas a través de proxy configurado (PROXY_URL).');
+} else {
+  console.log('[Innertube] PROXY_URL no configurada — peticiones directas sin proxy.');
+}
+
 export interface ResolvedStream {
   url: string;
   mimeType: string;
@@ -93,13 +119,41 @@ async function getInnertube(): Promise<Innertube> {
 
 /**
  * Orden de clientes a probar (valores válidos de InnerTubeClient en
- * youtubei.js 17.x). IOS va primero por latencia (sus formatos no requieren
- * descifrado de `n`). WEB_CREATOR se agrega al final: según el historial de
- * mantenimiento de yt-dlp, es el cliente documentado como workaround para
- * el requisito de verificación de edad — no IOS ni ANDROID. No garantiza
- * nada sin cookie, pero vale la pena tenerlo en la cadena antes de rendirnos.
+ * youtubei.js 17.x).
+ *
+ * ACTUALIZADO tras medir con datos reales (diagnose-result-*.json, 27 tracks):
+ * IOS y ANDROID fallan con HTTP 400 en el 100% de los casos — YouTube parece
+ * haber roto algo del lado de esos dos clientes en youtubei.js recientemente
+ * (contradice el comentario original de arriba, que asumía que IOS ganaba
+ * siempre). YTMUSIC/MWEB/WEB_CREATOR resolvieron el 100% de los tracks
+ * probados. Los dejamos al final en vez de quitarlos del todo — no cuestan
+ * nada si nunca se llega a ellos, y si YouTube/youtubei.js lo arregla más
+ * adelante, se benefician automáticamente sin tocar código. Antes, CADA
+ * resolución (incluso las que acababan bien) perdía varios segundos
+ * probando dos clientes muertos antes de llegar a uno que funciona.
  */
-const CLIENT_ORDER: InnerTubeClient[] = ['IOS', 'ANDROID', 'YTMUSIC', 'MWEB', 'WEB_CREATOR'];
+const CLIENT_ORDER: InnerTubeClient[] = ['YTMUSIC', 'MWEB', 'WEB_CREATOR', 'IOS', 'ANDROID'];
+
+/** Tiempo máximo por cliente antes de darlo por perdido y probar el siguiente. */
+const PER_CLIENT_TIMEOUT_MS = 7000;
+
+class ClientTimeoutError extends Error {
+  constructor(client: string) {
+    super(`Timeout tras ${PER_CLIENT_TIMEOUT_MS}ms esperando a ${client}`);
+    this.name = 'ClientTimeoutError';
+  }
+}
+
+/** Corre `fn` con un límite de tiempo — si se agota, sigue con el siguiente cliente en vez de colgar la resolución entera esperando a uno lento. */
+function withTimeout<T>(promise: Promise<T>, client: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new ClientTimeoutError(client)), PER_CLIENT_TIMEOUT_MS);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
 
 function extractExpiryMs(url: string): number {
   try {
@@ -134,7 +188,7 @@ export async function resolveAudioStream(
   for (const client of CLIENT_ORDER) {
     try {
       const tClientStart = performance.now();
-      const info = await yt.getBasicInfo(videoId, { client });
+      const info = await withTimeout(yt.getBasicInfo(videoId, { client }), client);
       const tInfo = performance.now();
 
       const format = info.chooseFormat({
@@ -148,7 +202,7 @@ export async function resolveAudioStream(
       }
 
       // decipher() es async en youtubei.js 17.x
-      const url = await format.decipher(yt.session.player);
+      const url = await withTimeout(format.decipher(yt.session.player), client);
       const tDecipher = performance.now();
 
       if (!url) {
@@ -211,7 +265,7 @@ export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResu
 
   for (const client of CLIENT_ORDER) {
     try {
-      const info = await yt.getBasicInfo(videoId, { client });
+      const info = await withTimeout(yt.getBasicInfo(videoId, { client }), client);
       const format = info.chooseFormat({ type: 'audio', quality: 'best' });
 
       if (!format) {
@@ -219,7 +273,7 @@ export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResu
         continue;
       }
 
-      const url = await format.decipher(yt.session.player);
+      const url = await withTimeout(format.decipher(yt.session.player), client);
       if (!url) {
         results.push({ client, success: false, error: 'No se pudo descifrar la URL' });
         continue;
