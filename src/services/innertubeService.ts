@@ -330,7 +330,19 @@ export async function getSessionInfo() {
 
 export async function searchTracks(query: string): Promise<SearchResultItem[]> {
   const yt = await getInnertube();
-  const results = await yt.search(query, { type: 'video' });
+
+  // Degradar a lista vacía en vez de propagar la excepción — un proxy caído
+  // o un fallo de red puntual no debe tumbar la búsqueda con un 500; el
+  // caller (KokoMusic backend) ya sabe tratar "sin resultados" como señal
+  // para probar otra fuente, en vez de recibir un error duro.
+  let results: Awaited<ReturnType<typeof yt.search>>;
+  try {
+    results = await withTimeout(yt.search(query, { type: 'video' }), 'search');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[innertube:search] falló para "${query}": ${message}`);
+    return [];
+  }
 
   const videos = (results.videos ?? []) as Array<{
     id: string;
