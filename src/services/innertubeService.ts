@@ -2,6 +2,7 @@ import { Innertube, Platform } from 'youtubei.js';
 import type { Types } from 'youtubei.js';
 import { cacheGet, cacheSet } from './cache.js';
 import { logResolution } from './resolutionStats.js';
+import { getPoToken } from './poTokenService.js';
 
 type InnerTubeClient = Types.InnerTubeClient;
 
@@ -262,6 +263,25 @@ function withTimeout<T>(promise: Promise<T>, client: string): Promise<T> {
   });
 }
 
+/**
+ * Adjunta un PoToken atado a `videoId` a la sesión ANTES de pedir
+ * getBasicInfo() — sin esto YouTube responde "OK" pero sin `streamingData`
+ * en absoluto para prácticamente cualquier canción actual (ver comentario en
+ * poTokenService.ts). Se aplica tanto a `session.po_token` (va en el cuerpo
+ * de la petición del player, es lo que desbloquea streamingData) como a
+ * `session.player.po_token` (se usa al descifrar la URL final, evita
+ * throttling/403 de googlevideo). Si falla, seguimos sin PoToken en vez de
+ * abortar — algunos vídeos aún resuelven sin él.
+ */
+async function attachPoToken(yt: Innertube, videoId: string): Promise<void> {
+  const poToken = await getPoToken(videoId);
+  if (!poToken) return;
+  yt.session.po_token = poToken;
+  if (yt.session.player) {
+    yt.session.player.po_token = poToken;
+  }
+}
+
 function extractExpiryMs(url: string): number {
   try {
     const parsed = new URL(url);
@@ -291,6 +311,8 @@ export async function resolveAudioStream(
   const wasAlreadyWarm = innertubeInstance !== null;
   const yt = await getInnertube();
   const tInnertubeReady = performance.now();
+
+  await attachPoToken(yt, videoId);
 
   for (const client of CLIENT_ORDER) {
     try {
@@ -372,6 +394,7 @@ export interface DiagnoseResult {
  */
 export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResult[]> {
   const yt = await getInnertube();
+  await attachPoToken(yt, videoId);
   const results: DiagnoseResult[] = [];
 
   for (const client of CLIENT_ORDER) {
