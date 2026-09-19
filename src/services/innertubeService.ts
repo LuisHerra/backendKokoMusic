@@ -101,7 +101,22 @@ async function getInnertube(): Promise<Innertube> {
     // obtenerla. Sin esto, la sesión es anónima — la mayoría del contenido
     // resuelve igual, pero lo que requiere login (algunos casos de
     // restricción de edad) seguirá fallando.
-    const cookie = process.env.YOUTUBE_COOKIE || undefined;
+    //
+    // Quitamos comillas envolventes por si el valor se pegó tal cual desde
+    // el navegador/gestor de variables (p.ej. "name1=value1; name2=value2"
+    // con las comillas incluidas como caracteres reales) — eso corrompe la
+    // cabecera Cookie entera y YouTube la trata como sesión anónima/inválida
+    // sin dar ningún error explícito, solo fallos silenciosos en contenido
+    // que requiere login.
+    let cookie = process.env.YOUTUBE_COOKIE || undefined;
+    if (cookie && cookie.length >= 2) {
+      const first = cookie[0];
+      const last = cookie[cookie.length - 1];
+      if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+        cookie = cookie.slice(1, -1);
+        console.warn('[Innertube] YOUTUBE_COOKIE tenía comillas envolventes — se han quitado automáticamente.');
+      }
+    }
 
     innertubeInitPromise = Innertube.create({
       lang: 'es',

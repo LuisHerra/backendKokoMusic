@@ -2,11 +2,31 @@ import { Router } from 'express';
 import {
   resolveAudioStream,
   diagnoseAudioStream,
+  getSessionInfo,
   type ResolvedStream,
 } from '../services/innertubeService.js';
 import { cacheGet, cacheSet, cacheDelete } from '../services/cache.js';
 
 export const streamRouter = Router();
+
+/**
+ * GET /api/stream/_session/info
+ * Diagnóstico de si YOUTUBE_COOKIE cargó de verdad — sin esto, la única
+ * forma de saberlo era inferirlo indirectamente por si un video con
+ * restricción de edad resolvía o no, lo cual falla por mil motivos
+ * distintos a "la cookie no cargó". Ruta de 2 segmentos ("_session/info"),
+ * no puede colisionar con /:videoId (1 segmento) ni con /:videoId/diagnose
+ * (un videoId real de YouTube nunca es "_session").
+ */
+streamRouter.get('/_session/info', async (_req, res) => {
+  try {
+    const info = await getSessionInfo();
+    return res.json(info);
+  } catch (err) {
+    console.error('[stream/_session/info] error inesperado:', err);
+    return res.status(500).json({ error: 'Error interno obteniendo info de sesión.' });
+  }
+});
 
 /**
  * GET /api/stream/:videoId/diagnose
