@@ -3,6 +3,7 @@ import {
   resolveAudioStream,
   diagnoseAudioStream,
   getSessionInfo,
+  getProxyPoolStatus,
   type ResolvedStream,
 } from '../services/innertubeService.js';
 import { cacheGet, cacheSet, cacheDelete } from '../services/cache.js';
@@ -22,7 +23,7 @@ export const streamRouter = Router();
 streamRouter.get('/_session/info', async (_req, res) => {
   try {
     const info = await getSessionInfo();
-    return res.json(info);
+    return res.json({ ...info, proxyPool: getProxyPoolStatus() });
   } catch (err) {
     console.error('[stream/_session/info] error inesperado:', err);
     return res.status(500).json({ error: 'Error interno obteniendo info de sesión.' });

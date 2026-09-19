@@ -32,29 +32,85 @@ Platform.shim.eval = async (data: { output: string }) => {
 };
 
 /**
- * Enruta las peticiones de youtubei.js hacia YouTube a través de un proxy
- * (residencial u otro) cuando PROXY_URL está configurada. Formato esperado:
- * "http://usuario:contraseña@host:puerto".
+ * Enruta las peticiones de youtubei.js hacia YouTube a través de un POOL de
+ * proxies (residenciales u otros), con fallback automático al siguiente si
+ * el actual empieza a dar errores de CONEXIÓN (no de contenido — un video
+ * que no existe no es culpa del proxy).
+ *
+ * Configuración: PROXY_URLS con varias URLs separadas por coma
+ * ("http://user:pass@host1:port1,http://user:pass@host2:port2,..."), o
+ * PROXY_URL con una sola (se sigue soportando por compatibilidad).
  *
  * Motivo: YouTube penaliza fuertemente las IPs de datacenter (como la de
  * Render) con 403 en /youtubei/v1/player — ver docs/README para el
- * historial de diagnóstico. Solo afecta a las peticiones de youtubei.js, no
- * al resto del servidor — mismo patrón de inyección que Platform.shim.eval
- * de arriba.
+ * historial de diagnóstico. Y una sola IP residencial también puede
+ * degradarse con el tiempo/uso — con un pool, cuando eso pase, el sistema
+ * salta sola a la siguiente en vez de quedar todo el servicio bloqueado
+ * hasta que alguien cambie la variable de entorno a mano.
  */
-const proxyUrl = process.env.PROXY_URL;
-if (proxyUrl) {
-  // No sobreescribimos Platform.shim.fetch con el fetch del paquete `undici`
-  // — sus objetos Request/Response viven en un "realm" distinto al fetch
-  // global de Node (que también es undici, pero la instancia bundleada), y
-  // youtubei.js construye sus Request con el global. Mezclarlos da
-  // "Failed to parse URL from [object Request]". En vez de eso, mutamos el
-  // dispatcher GLOBAL: el fetch nativo de Node ya lo respeta sin más cambios.
+function loadProxyPool(): string[] {
+  const multi = process.env.PROXY_URLS;
+  if (multi) return multi.split(',').map((s) => s.trim()).filter(Boolean);
+  const single = process.env.PROXY_URL;
+  return single ? [single] : [];
+}
+
+const proxyPool = loadProxyPool();
+let currentProxyIndex = -1; // -1 = sin proxy activo todavía
+
+/** Aplica el proxy en `index` como dispatcher global. No mezclamos el fetch
+ * de `undici` con los Request nativos de youtubei.js (da "Failed to parse
+ * URL from [object Request]") — en vez de eso mutamos el dispatcher GLOBAL,
+ * que el fetch nativo de Node ya respeta sin más cambios. */
+async function applyProxyAt(index: number): Promise<boolean> {
+  if (index < 0 || index >= proxyPool.length) return false;
   const { ProxyAgent, setGlobalDispatcher } = await import('undici');
-  setGlobalDispatcher(new ProxyAgent(proxyUrl));
-  console.log('[Innertube] Peticiones enrutadas a través de proxy configurado (PROXY_URL).');
+  setGlobalDispatcher(new ProxyAgent(proxyPool[index]));
+  currentProxyIndex = index;
+  console.log(`[Innertube] Usando proxy ${index + 1}/${proxyPool.length} del pool.`);
+  return true;
+}
+
+/**
+ * Distingue un fallo de CONEXIÓN (el proxy en sí está caído/inalcanzable) de
+ * un fallo normal de contenido (video bloqueado, no encontrado, etc. — eso
+ * significa que el proxy SÍ conectó bien, solo que YouTube respondió con un
+ * rechazo). Solo lo primero justifica saltar al siguiente proxy del pool.
+ */
+function isProxyConnectionError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /fetch failed|ECONNREFUSED|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|ENOTFOUND|EPROTO|socket disconnected|proxy.*(connect|auth)/i.test(message);
+}
+
+/**
+ * Si `err` es un fallo de conexión del proxy actual, promueve el pool al
+ * siguiente. Devuelve true si se pudo cambiar (había otro proxy disponible).
+ * Las llamadas que fallen DESPUÉS de esto en el mismo ciclo de reintentos ya
+ * usan el nuevo proxy automáticamente (el dispatcher es global).
+ */
+async function handlePotentialProxyFailure(err: unknown): Promise<void> {
+  if (!isProxyConnectionError(err)) return;
+  const next = currentProxyIndex + 1;
+  if (next < proxyPool.length) {
+    console.warn(`[Innertube] Proxy ${currentProxyIndex + 1} parece caído (${err instanceof Error ? err.message : err}) — pasando al siguiente del pool.`);
+    await applyProxyAt(next);
+  } else {
+    console.error(`[Innertube] Proxy ${currentProxyIndex + 1} parece caído y no quedan más en el pool (${proxyPool.length} configurados).`);
+  }
+}
+
+export function getProxyPoolStatus() {
+  return {
+    poolSize: proxyPool.length,
+    currentProxyIndex,
+    usingProxy: currentProxyIndex >= 0,
+  };
+}
+
+if (proxyPool.length > 0) {
+  await applyProxyAt(0);
 } else {
-  console.log('[Innertube] PROXY_URL no configurada — peticiones directas sin proxy.');
+  console.log('[Innertube] Sin proxies configurados (PROXY_URLS/PROXY_URL) — peticiones directas.');
 }
 
 export interface ResolvedStream {
@@ -89,46 +145,81 @@ export interface SearchResultItem {
 let innertubeInstance: Innertube | null = null;
 let innertubeInitPromise: Promise<Innertube> | null = null;
 
+/** Cookie opcional de una cuenta real de YouTube (formato estándar de header
+ * Cookie: "name1=value1; name2=value2"). Ver README para cómo obtenerla. Sin
+ * esto, la sesión es anónima — la mayoría del contenido resuelve igual, pero
+ * lo que requiere login (algunos casos de restricción de edad) seguirá
+ * fallando.
+ *
+ * Quitamos comillas envolventes por si el valor se pegó tal cual desde el
+ * navegador/gestor de variables (p.ej. "name1=value1; name2=value2" con las
+ * comillas incluidas como caracteres reales) — eso corrompe la cabecera
+ * Cookie entera y YouTube la trata como sesión anónima/inválida sin dar
+ * ningún error explícito, solo fallos silenciosos en contenido que requiere
+ * login. */
+function loadYoutubeCookie(): string | undefined {
+  let cookie = process.env.YOUTUBE_COOKIE || undefined;
+  if (cookie && cookie.length >= 2) {
+    const first = cookie[0];
+    const last = cookie[cookie.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      cookie = cookie.slice(1, -1);
+      console.warn('[Innertube] YOUTUBE_COOKIE tenía comillas envolventes — se han quitado automáticamente.');
+    }
+  }
+  return cookie;
+}
+
 /**
  * Instancia única y reutilizada de Innertube (evita recrear sesión/cliente
  * en cada request — equivalente a mantener el "daemon" caliente).
+ *
+ * Innertube.create() ya hace peticiones de red (descarga el player.js para
+ * poder descifrar firmas) — si el proxy activo está caído, esto fallaba con
+ * una excepción SIN CAPTURAR que tumbaba el proceso entero, sin pasar nunca
+ * por handlePotentialProxyFailure (que solo cubre los reintentos DENTRO de
+ * resolveAudioStream/searchTracks, ejecutados después de que ya existe una
+ * sesión). Aquí se prueba cada proxy del pool hasta que uno consiga crear la
+ * sesión, o hasta agotarlos.
  */
 async function getInnertube(): Promise<Innertube> {
   if (innertubeInstance) return innertubeInstance;
+  if (innertubeInitPromise) return innertubeInitPromise;
 
-  if (!innertubeInitPromise) {
-    // Cookie opcional de una cuenta real de YouTube (formato estándar de
-    // header Cookie: "name1=value1; name2=value2"). Ver README para cómo
-    // obtenerla. Sin esto, la sesión es anónima — la mayoría del contenido
-    // resuelve igual, pero lo que requiere login (algunos casos de
-    // restricción de edad) seguirá fallando.
-    //
-    // Quitamos comillas envolventes por si el valor se pegó tal cual desde
-    // el navegador/gestor de variables (p.ej. "name1=value1; name2=value2"
-    // con las comillas incluidas como caracteres reales) — eso corrompe la
-    // cabecera Cookie entera y YouTube la trata como sesión anónima/inválida
-    // sin dar ningún error explícito, solo fallos silenciosos en contenido
-    // que requiere login.
-    let cookie = process.env.YOUTUBE_COOKIE || undefined;
-    if (cookie && cookie.length >= 2) {
-      const first = cookie[0];
-      const last = cookie[cookie.length - 1];
-      if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-        cookie = cookie.slice(1, -1);
-        console.warn('[Innertube] YOUTUBE_COOKIE tenía comillas envolventes — se han quitado automáticamente.');
+  const cookie = loadYoutubeCookie();
+
+  innertubeInitPromise = (async () => {
+    let lastErr: unknown;
+    // +1: además de los proxies del pool, un último intento sin proxy si se agotan todos
+    const maxAttempts = Math.max(1, proxyPool.length) + (proxyPool.length > 0 ? 1 : 0);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const yt = await Innertube.create({
+          lang: 'es',
+          location: 'ES',
+          retrieve_player: true, // necesario para descifrar firmas (n-token)
+          cookie,
+        });
+        innertubeInstance = yt;
+        return yt;
+      } catch (err) {
+        lastErr = err;
+        console.error(`[Innertube] Fallo creando la sesión (intento ${attempt + 1}/${maxAttempts}):`, err instanceof Error ? err.message : err);
+        if (isProxyConnectionError(err) && currentProxyIndex + 1 < proxyPool.length) {
+          await applyProxyAt(currentProxyIndex + 1);
+          continue;
+        }
+        break;
       }
     }
 
-    innertubeInitPromise = Innertube.create({
-      lang: 'es',
-      location: 'ES',
-      retrieve_player: true, // necesario para descifrar firmas (n-token)
-      cookie,
-    }).then((yt) => {
-      innertubeInstance = yt;
-      return yt;
-    });
-  }
+    // Se agotaron los proxies (o el error no era de conexión) — dejar que la
+    // próxima llamada reintente desde cero en vez de quedar con una promesa
+    // rechazada cacheada para siempre.
+    innertubeInitPromise = null;
+    throw lastErr;
+  })();
 
   return innertubeInitPromise;
 }
@@ -239,7 +330,7 @@ export async function resolveAudioStream(
           `decipher=${timing.decipherMs}ms total=${timing.totalMs}ms`
       );
 
-      logResolution({ videoId, client, ms: timing.totalMs, proxyUsed: Boolean(process.env.PROXY_URL) });
+      logResolution({ videoId, client, ms: timing.totalMs, proxyUsed: currentProxyIndex >= 0 });
 
       return {
         url,
@@ -254,11 +345,12 @@ export async function resolveAudioStream(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[innertube:${client}] falló para ${videoId}: ${message}`);
+      await handlePotentialProxyFailure(err);
       continue;
     }
   }
 
-  logResolution({ videoId, client: null, ms: Math.round(performance.now() - t0), proxyUsed: Boolean(process.env.PROXY_URL) });
+  logResolution({ videoId, client: null, ms: Math.round(performance.now() - t0), proxyUsed: currentProxyIndex >= 0 });
   return null;
 }
 
@@ -307,6 +399,7 @@ export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResu
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       results.push({ client, success: false, error: message });
+      await handlePotentialProxyFailure(err);
     }
   }
 
@@ -341,6 +434,7 @@ export async function searchTracks(query: string): Promise<SearchResultItem[]> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[innertube:search] falló para "${query}": ${message}`);
+    await handlePotentialProxyFailure(err);
     return [];
   }
 
