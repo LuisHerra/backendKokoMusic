@@ -6,6 +6,7 @@ import {
   type ResolvedStream,
 } from '../services/innertubeService.js';
 import { cacheGet, cacheSet, cacheDelete } from '../services/cache.js';
+import { summarizeResolutions } from '../services/resolutionStats.js';
 
 export const streamRouter = Router();
 
@@ -26,6 +27,18 @@ streamRouter.get('/_session/info', async (_req, res) => {
     console.error('[stream/_session/info] error inesperado:', err);
     return res.status(500).json({ error: 'Error interno obteniendo info de sesión.' });
   }
+});
+
+/**
+ * GET /api/stream/_session/resolution-stats?hours=24
+ * Tasa de éxito real de resolveAudioStream en producción — qué cliente
+ * gana normalmente, cuántas resoluciones fallan del todo, latencia media.
+ * Pensado para decidir con datos reales cuántas IPs residenciales hacen
+ * falta en la próxima renovación, en vez de estimarlo a ojo.
+ */
+streamRouter.get('/_session/resolution-stats', (req, res) => {
+  const hours = Number(req.query.hours) || 24;
+  return res.json(summarizeResolutions(hours));
 });
 
 /**

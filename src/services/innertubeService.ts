@@ -1,6 +1,7 @@
 import { Innertube, Platform } from 'youtubei.js';
 import type { Types } from 'youtubei.js';
 import { cacheGet, cacheSet } from './cache.js';
+import { logResolution } from './resolutionStats.js';
 
 type InnerTubeClient = Types.InnerTubeClient;
 
@@ -238,6 +239,8 @@ export async function resolveAudioStream(
           `decipher=${timing.decipherMs}ms total=${timing.totalMs}ms`
       );
 
+      logResolution({ videoId, client, ms: timing.totalMs, proxyUsed: Boolean(process.env.PROXY_URL) });
+
       return {
         url,
         mimeType: format.mime_type,
@@ -255,6 +258,7 @@ export async function resolveAudioStream(
     }
   }
 
+  logResolution({ videoId, client: null, ms: Math.round(performance.now() - t0), proxyUsed: Boolean(process.env.PROXY_URL) });
   return null;
 }
 
