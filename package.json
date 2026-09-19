@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "undici": "^8.10.2",
+    "undici": "^6.28.1",
     "youtubei.js": "^17.0.1"
   },
   "devDependencies": {
