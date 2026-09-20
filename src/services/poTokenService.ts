@@ -1,8 +1,9 @@
 import { JSDOM } from 'jsdom';
-import { BotGuardClient, getChallenge } from 'bgutils-js/botguard';
+import { BotGuardClient } from 'bgutils-js/botguard';
 import type { WebPoSignalOutput } from 'bgutils-js/shared-types';
 import { buildURL, getHeaders, USER_AGENT } from 'bgutils-js/utils';
 import { WebPoMinter } from 'bgutils-js/webpo';
+import type { Innertube } from 'youtubei.js';
 
 /**
  * YouTube dejó de devolver `streamingData` para prácticamente cualquier
@@ -17,6 +18,14 @@ import { WebPoMinter } from 'bgutils-js/webpo';
  *
  * Referencia oficial (ejemplo verificado contra bgutils-js 4.0.3):
  * https://github.com/LuanRT/BgUtils/blob/main/examples/index.ts
+ *
+ * El challenge de BotGuard se pide a través de InnerTube
+ * (`yt.getAttestationChallenge()`, endpoint `/att/get`) en vez de llamar
+ * directo a la API privada de Web Anti-Abuse (`jnn-pa.googleapis.com/.../Waa/Create`).
+ * El propio maintainer de BgUtils señaló que ese camino directo puede dar un
+ * PO Token que ya no vale para clientes que migraron a solo-SABR (p. ej.
+ * MWEB) si la versión de youtubei.js va un poco por detrás de YouTube:
+ * https://github.com/LuanRT/BgUtils/issues/48
  */
 
 // Constante pública usada por el cliente WEB de YouTube para pedir el
@@ -71,20 +80,48 @@ let cachedMinter: MinterBundle | null = null;
 let mintingPromise: Promise<MinterBundle> | null = null;
 
 /**
+ * Descarga el intérprete de BotGuard cuando el challenge de InnerTube solo
+ * trae la URL (`interpreter_url`) y no el script inline
+ * (`private_do_not_access_or_else_safe_script_wrapped_value`) — a veces
+ * viene uno, a veces el otro, según cómo YouTube arme la respuesta de
+ * `/att/get` en ese momento.
+ */
+async function resolveInterpreterJavascript(bgChallenge: NonNullable<Awaited<ReturnType<Innertube['getAttestationChallenge']>>['bg_challenge']>): Promise<string> {
+  const inline = bgChallenge.interpreter_url.private_do_not_access_or_else_safe_script_wrapped_value;
+  if (inline) return inline;
+
+  const resourceUrl = bgChallenge.interpreter_url.private_do_not_access_or_else_trusted_resource_url_wrapped_value;
+  if (!resourceUrl) {
+    throw new Error('BotGuard: el challenge no trae ni script inline ni URL de intérprete.');
+  }
+  const fullUrl = resourceUrl.startsWith('http') ? resourceUrl : `https:${resourceUrl}`;
+  const scriptRes = await fetch(fullUrl);
+  if (!scriptRes.ok) {
+    throw new Error(`BotGuard: no se pudo descargar el intérprete (HTTP ${scriptRes.status}).`);
+  }
+  return scriptRes.text();
+}
+
+/**
  * Resuelve un challenge completo de BotGuard (VM + 2 peticiones de red) y
  * construye el WebPoMinter resultante. Esto es lo caro — el minter, una vez
  * creado, puede generar tokens para cualquier videoId localmente (sin red)
  * hasta que el integrity token subyacente expire.
+ *
+ * El challenge se pide vía InnerTube (`yt.getAttestationChallenge`) en vez
+ * de la API privada de WAA directamente — ver comentario de cabecera del
+ * archivo (issue #48 de BgUtils, clientes migrados a solo-SABR como MWEB).
  */
-async function createMinter(): Promise<MinterBundle> {
+async function createMinter(yt: Innertube): Promise<MinterBundle> {
   ensureBotGuardDom();
 
-  const challenge = await getChallenge({ fetchFunction: fetch, requestKey: REQUEST_KEY });
-
-  const interpreterJavascript = challenge.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue;
-  if (!interpreterJavascript) {
-    throw new Error('BotGuard: interpreterJavascript no disponible en el challenge.');
+  const challengeResponse = await yt.getAttestationChallenge('ENGAGEMENT_TYPE_UNBOUND');
+  const bgChallenge = challengeResponse.bg_challenge;
+  if (!bgChallenge) {
+    throw new Error('BotGuard: InnerTube no devolvió bg_challenge en /att/get.');
   }
+
+  const interpreterJavascript = await resolveInterpreterJavascript(bgChallenge);
   // Mismo mecanismo que el descifrado de firmas en innertubeService.ts: es
   // código de YouTube ejecutado vía Function() a propósito, no eval de datos
   // de usuario.
@@ -92,8 +129,8 @@ async function createMinter(): Promise<MinterBundle> {
   new Function(interpreterJavascript)();
 
   const botGuardClient = await BotGuardClient.create({
-    program: challenge.program,
-    globalName: challenge.globalName,
+    program: bgChallenge.program,
+    globalName: bgChallenge.global_name,
     globalObject: globalThis,
   });
 
@@ -130,7 +167,7 @@ async function createMinter(): Promise<MinterBundle> {
   return { minter, expiresAt };
 }
 
-async function ensureMinter(): Promise<WebPoMinter> {
+async function ensureMinter(yt: Innertube): Promise<WebPoMinter> {
   if (cachedMinter && Date.now() < cachedMinter.expiresAt) {
     return cachedMinter.minter;
   }
@@ -138,7 +175,7 @@ async function ensureMinter(): Promise<WebPoMinter> {
     return (await mintingPromise).minter;
   }
 
-  mintingPromise = createMinter();
+  mintingPromise = createMinter(yt);
   try {
     cachedMinter = await mintingPromise;
     return cachedMinter.minter;
@@ -153,9 +190,9 @@ async function ensureMinter(): Promise<WebPoMinter> {
  * token). Mintar es barato una vez existe el minter; null si BotGuard falló
  * del todo (el caller debe seguir intentando sin PoToken en vez de romperse).
  */
-export async function getPoToken(contentBinding: string): Promise<string | null> {
+export async function getPoToken(yt: Innertube, contentBinding: string): Promise<string | null> {
   try {
-    const minter = await ensureMinter();
+    const minter = await ensureMinter(yt);
     return await minter.mintAsWebsafeString(contentBinding);
   } catch (err) {
     console.error('[PoToken] No se pudo generar PoToken vía BotGuard:', err instanceof Error ? err.message : err);

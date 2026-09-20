@@ -198,7 +198,12 @@ async function getInnertube(): Promise<Innertube> {
       try {
         const yt = await Innertube.create({
           lang: 'es',
-          location: 'ES',
+          // Sin `location` fijo: el pool de proxies actual reparte IPs entre
+          // EE.UU./Italia/Francia/Reino Unido/Colombia, ninguna en España —
+          // declarar location:'ES' contra una IP de otro país es una señal
+          // de anomalía extra para el anti-abuso de Google, autoinfligida.
+          // Sin el campo, InnerTube infiere la región a partir de la IP real
+          // del proxy activo, que es justo lo que sí queremos que vea.
           retrieve_player: true, // necesario para descifrar firmas (n-token)
           cookie,
         });
@@ -274,7 +279,7 @@ function withTimeout<T>(promise: Promise<T>, client: string): Promise<T> {
  * abortar — algunos vídeos aún resuelven sin él.
  */
 async function attachPoToken(yt: Innertube, videoId: string): Promise<void> {
-  const poToken = await getPoToken(videoId);
+  const poToken = await getPoToken(yt, videoId);
   if (!poToken) return;
   yt.session.po_token = poToken;
   if (yt.session.player) {
