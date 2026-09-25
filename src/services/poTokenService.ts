@@ -185,6 +185,15 @@ async function ensureMinter(yt: Innertube): Promise<WebPoMinter> {
 }
 
 /**
+ * Tira el minter actual. El integrity token de BotGuard queda atado a la
+ * sesión/IP que lo generó — tras cambiar de proxy o de sesión hay que
+ * volver a generarlo en vez de seguir mintando con uno "quemado".
+ */
+export function resetPoTokenMinter(): void {
+  cachedMinter = null;
+}
+
+/**
  * Devuelve un PO Token atado a `contentBinding` (normalmente el videoId que
  * se va a resolver — YouTube los ata al vídeo concreto para el player/GVS
  * token). Mintar es barato una vez existe el minter; null si BotGuard falló
