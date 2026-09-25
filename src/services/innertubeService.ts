@@ -105,32 +105,61 @@ export function getProxyPoolStatus() {
     poolSize: proxyPool.length,
     currentProxyIndex,
     usingProxy: currentProxyIndex >= 0,
-    cookieDisabled,
+    cookieDisabled: isCookieDisabled(),
+    cookieDisabledUntil: isCookieDisabled() ? cookieDisabledUntil : null,
+    blockStreak,
   };
 }
 
-// ── Recuperación ante bloqueo total (403 en todo) ────────────────────────────
+// ── Recuperación ante bloqueos ───────────────────────────────────────────────
 // handlePotentialProxyFailure solo salta de proxy con errores de CONEXIÓN. Pero
-// cuando YouTube quema la sesión o la IP, el proxy conecta perfectamente y lo
-// que llega es un 403 en /player, /search y /att/get para CUALQUIER vídeo
-// (incluido Rick Astley) — eso no es "este vídeo no existe", es un bloqueo, y
-// antes nos quedábamos pegados a él indefinidamente.
+// cuando YouTube quema la IP o la sesión, el proxy conecta perfectamente y lo
+// que llega es:
+//   - un 403 en /player, /search y /att/get para cualquier vídeo, o
+//   - LOGIN_REQUIRED ("confirma que no eres un bot"), que youtubei.js acaba
+//     reportando como "Streaming data not available".
+// Eso no es "este vídeo no existe", es un bloqueo, y antes nos quedábamos
+// pegados a él indefinidamente.
 //
-// Escalado:
-//   1. Si hay YOUTUBE_COOKIE, quitarla y pasar a sesión anónima. Una cookie de
-//      cuenta usada desde 15 IPs de países distintos es de lo más sospechoso
-//      para Google, y cuando la invalida el 403 afecta a TODO (incluida la
-//      búsqueda, que desde IPs "malas" suele seguir funcionando). Anónimo
-//      resuelve casi todo el catálogo igual.
-//   2. Rotar al siguiente proxy del pool (circular).
-// En ambos casos se recrea la sesión InnerTube y el minter de PoToken, que
+// Escalado (cada bloqueo seguido sube un escalón; un acierto lo resetea):
+//   1. Rotar al siguiente proxy del pool (circular), manteniendo la cookie:
+//      la sesión con cuenta es justo lo que ayuda a pasar la verificación
+//      antibots desde IPs de proxy.
+//   2. Si tras COOKIE_DISABLE_AFTER_BLOCKS rotaciones sigue bloqueado, puede
+//      que la cookie esté quemada: se desactiva temporalmente
+//      (COOKIE_DISABLE_MS) y se vuelve a activar sola después. Antes se
+//      desactivaba al primer 403 y para siempre (hasta reiniciar), lo que dejó
+//      fuera una cookie recién renovada.
+// En cada paso se recrea la sesión InnerTube y el minter de PoToken, que
 // quedan atados a la sesión/IP anterior.
 
-let cookieDisabled = false;
+const COOKIE_DISABLE_AFTER_BLOCKS = 3;
+const COOKIE_DISABLE_MS = 30 * 60 * 1000;
+let cookieDisabledUntil = 0;
+let blockStreak = 0;
 let lastRecoveryAt = 0;
 const RECOVERY_DEBOUNCE_MS = 5000;
 
-function isForbiddenError(err: unknown): boolean {
+function isCookieDisabled(): boolean {
+  return Date.now() < cookieDisabledUntil;
+}
+
+/** Si la sesión actual se creó con o sin cookie — para recrearla cuando eso deba cambiar. */
+let sessionUsesCookie: boolean | null = null;
+
+function wantsCookie(): boolean {
+  return Boolean(process.env.YOUTUBE_COOKIE) && !isCookieDisabled();
+}
+
+class BotCheckError extends Error {
+  constructor(status: string, reason?: string) {
+    super(`Playability ${status}${reason ? `: ${reason}` : ''}`);
+    this.name = 'BotCheckError';
+  }
+}
+
+function isBlockError(err: unknown): boolean {
+  if (err instanceof BotCheckError) return true;
   const message = err instanceof Error ? err.message : String(err);
   return /status code 403/.test(message);
 }
@@ -138,7 +167,20 @@ function isForbiddenError(err: unknown): boolean {
 function resetSession(): void {
   innertubeInstance = null;
   innertubeInitPromise = null;
+  sessionUsesCookie = null;
   resetPoTokenMinter();
+}
+
+/** Recrea la sesión si la cookie debe (des)activarse respecto a como se creó — p. ej. al acabar la desactivación temporal. */
+function syncSessionCookieState(): void {
+  if (innertubeInstance && sessionUsesCookie !== null && sessionUsesCookie !== wantsCookie()) {
+    console.log(`[Innertube] ${wantsCookie() ? 'Reactivando' : 'Desactivando'} YOUTUBE_COOKIE — recreando sesión.`);
+    resetSession();
+  }
+}
+
+function recordUnblocked(): void {
+  blockStreak = 0;
 }
 
 /**
@@ -150,16 +192,20 @@ async function recoverFromBlock(context: string): Promise<boolean> {
   // la primera escala; el resto reintenta con lo que esa haya cambiado.
   if (Date.now() - lastRecoveryAt < RECOVERY_DEBOUNCE_MS) return true;
   lastRecoveryAt = Date.now();
+  blockStreak++;
 
-  if (!cookieDisabled && process.env.YOUTUBE_COOKIE) {
-    cookieDisabled = true;
+  const canRotate = proxyPool.length > 1;
+  const shouldDropCookie = wantsCookie() && (blockStreak > COOKIE_DISABLE_AFTER_BLOCKS || !canRotate);
+
+  if (shouldDropCookie) {
+    cookieDisabledUntil = Date.now() + COOKIE_DISABLE_MS;
     console.error(
-      `[Innertube] 🔴 Bloqueo total (403) en ${context} — desactivando YOUTUBE_COOKIE y pasando a sesión anónima. ` +
-      `Probablemente la cookie ha caducado o Google la ha invalidado: renuévala.`
+      `[Innertube] 🔴 Bloqueo en ${context} (${blockStreak} seguidos) — desactivando YOUTUBE_COOKIE ${COOKIE_DISABLE_MS / 60000} min. ` +
+      `Si se repite a menudo, la cookie puede estar caducada: renuévala.`
     );
-  } else if (proxyPool.length > 1) {
+  } else if (canRotate) {
     const next = (currentProxyIndex + 1) % proxyPool.length;
-    console.error(`[Innertube] 🔴 Bloqueo total (403) en ${context} con proxy ${currentProxyIndex + 1} — rotando al ${next + 1}/${proxyPool.length}.`);
+    console.error(`[Innertube] 🔴 Bloqueo en ${context} con proxy ${currentProxyIndex + 1} (${blockStreak} seguidos) — rotando al ${next + 1}/${proxyPool.length}.`);
     await applyProxyAt(next);
   } else {
     return false;
@@ -248,7 +294,8 @@ async function getInnertube(): Promise<Innertube> {
   if (innertubeInstance) return innertubeInstance;
   if (innertubeInitPromise) return innertubeInitPromise;
 
-  const cookie = cookieDisabled ? undefined : loadYoutubeCookie();
+  const useCookie = wantsCookie();
+  const cookie = useCookie ? loadYoutubeCookie() : undefined;
 
   innertubeInitPromise = (async () => {
     let lastErr: unknown;
@@ -269,6 +316,7 @@ async function getInnertube(): Promise<Innertube> {
           cookie,
         });
         innertubeInstance = yt;
+        sessionUsesCookie = useCookie;
         return yt;
       } catch (err) {
         lastErr = err;
@@ -383,6 +431,7 @@ const EARLY_BLOCK_THRESHOLD = 2;
 export async function resolveAudioStream(
   videoId: string
 ): Promise<ResolvedStream | null> {
+  syncSessionCookieState();
   for (let attempt = 0; ; attempt++) {
     const { result, blocked } = await resolveAudioStreamOnce(videoId);
     if (result) return result;
@@ -407,6 +456,13 @@ async function resolveAudioStreamOnce(
       const tClientStart = performance.now();
       const info = await withTimeout(yt.getBasicInfo(videoId, { client }), client);
       const tInfo = performance.now();
+
+      // La verificación antibots llega como LOGIN_REQUIRED sin streamingData;
+      // sin esto solo veíamos "Streaming data not available" y no rotábamos.
+      const playability = (info as { playability_status?: { status?: string; reason?: string } }).playability_status;
+      if (playability?.status === 'LOGIN_REQUIRED') {
+        throw new BotCheckError(playability.status, playability.reason);
+      }
 
       const format = info.chooseFormat({
         type: 'audio',
@@ -441,6 +497,7 @@ async function resolveAudioStreamOnce(
       );
 
       logResolution({ videoId, client, ms: timing.totalMs, proxyUsed: currentProxyIndex >= 0 });
+      recordUnblocked();
 
       return {
         result: {
@@ -459,7 +516,7 @@ async function resolveAudioStreamOnce(
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[innertube:${client}] falló para ${videoId}: ${message}`);
       await handlePotentialProxyFailure(err);
-      if (isForbiddenError(err)) {
+      if (isBlockError(err)) {
         forbiddenCount++;
         // Los primeros N clientes seguidos con 403 → bloqueo, cortar ya.
         if (forbiddenCount >= EARLY_BLOCK_THRESHOLD && forbiddenCount === CLIENT_ORDER.indexOf(client) + 1) {
@@ -499,6 +556,11 @@ export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResu
   for (const client of CLIENT_ORDER) {
     try {
       const info = await withTimeout(yt.getBasicInfo(videoId, { client }), client);
+      const playability = (info as { playability_status?: { status?: string; reason?: string } }).playability_status;
+      if (playability?.status && playability.status !== 'OK') {
+        results.push({ client, success: false, error: `Playability ${playability.status}${playability.reason ? `: ${playability.reason}` : ''}` });
+        continue;
+      }
       const format = info.chooseFormat({ type: 'audio', quality: 'best' });
 
       if (!format) {
@@ -558,7 +620,7 @@ export async function searchTracks(query: string, allowRecovery = true): Promise
     console.warn(`[innertube:search] falló para "${query}": ${message}`);
     await handlePotentialProxyFailure(err);
     // La búsqueda casi nunca da 403 por el contenido — si lo da, es bloqueo.
-    if (allowRecovery && isForbiddenError(err) && (await recoverFromBlock('search'))) {
+    if (allowRecovery && isBlockError(err) && (await recoverFromBlock('search'))) {
       return searchTracks(query, false);
     }
     return [];
