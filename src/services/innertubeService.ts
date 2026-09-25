@@ -583,6 +583,100 @@ export async function searchTracks(query: string, allowRecovery = true): Promise
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Letras vía YouTube Music
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface MusicLyricsResult {
+  videoId: string;
+  title?: string;
+  artists: string[];
+  lyrics: string;
+  /** "Fuente: Musixmatch" / "Fuente: LyricFind", tal cual lo da YouTube Music. */
+  source?: string;
+}
+
+const LYRICS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LYRICS_MISS_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Busca la canción en YouTube Music (filtro "canciones", que devuelve la
+ * versión de audio oficial — la que sí trae letra, los videoclips a menudo
+ * no) y pide su letra. Probado: encuentra letras que LRCLIB no tiene
+ * (p. ej. Young Cister), pero solo en texto plano, sin tiempos.
+ */
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export async function getMusicLyrics(artist: string, title: string): Promise<MusicLyricsResult | null> {
+  const query = `${artist} ${title}`.trim();
+  const key = `lyrics:${query.toLowerCase()}`;
+  const cached = cacheGet<MusicLyricsResult | 'miss'>(key);
+  if (cached) return cached === 'miss' ? null : cached;
+
+  const yt = await getInnertube();
+  let song: { id?: string; title?: unknown; artists?: Array<{ name?: string }> } | undefined;
+  try {
+    const search = await withTimeout(yt.music.search(query, { type: 'song' }), 'music-search');
+    const shelf = (search.contents ?? []).find((c) => (c as { type?: string }).type === 'MusicShelf') as
+      | { contents?: Array<typeof song> }
+      | undefined;
+    // El primer resultado no siempre es la canción pedida (p. ej. un remix de
+    // otro artista con el mismo título) — exigimos que case el artista y que
+    // el título contenga el buscado.
+    const wantedArtist = normalizeForMatch(artist);
+    const wantedTitle = normalizeForMatch(title);
+    song = shelf?.contents?.find((item) => {
+      if (typeof item?.id !== 'string') return false;
+      const itemTitle = normalizeForMatch(String((item.title as { toString?: () => string })?.toString?.() ?? item.title ?? ''));
+      const artistOk = !wantedArtist || (item.artists ?? []).some((a) => {
+        const name = normalizeForMatch(a.name ?? '');
+        return !!name && (name.includes(wantedArtist) || wantedArtist.includes(name));
+      });
+      const titleOk = !wantedTitle || itemTitle.includes(wantedTitle) || wantedTitle.includes(itemTitle);
+      return artistOk && titleOk;
+    });
+  } catch (err) {
+    console.warn(`[innertube:lyrics] búsqueda falló para "${query}":`, err instanceof Error ? err.message : err);
+    await handlePotentialProxyFailure(err);
+    return null; // error de red/bloqueo: no se cachea como "sin letra"
+  }
+
+  if (!song?.id) {
+    cacheSet(key, 'miss', Date.now() + LYRICS_MISS_TTL_MS);
+    return null;
+  }
+
+  try {
+    const lyrics = await withTimeout(yt.music.getLyrics(song.id), 'lyrics');
+    const text = lyrics?.description?.toString().trim() ?? '';
+    if (text.length < 20) {
+      cacheSet(key, 'miss', Date.now() + LYRICS_MISS_TTL_MS);
+      return null;
+    }
+    const result: MusicLyricsResult = {
+      videoId: song.id,
+      title: typeof song.title === 'string' ? song.title : (song.title as { toString?: () => string })?.toString?.(),
+      artists: (song.artists ?? []).map((a) => a.name).filter((n): n is string => Boolean(n)),
+      lyrics: text,
+      source: lyrics?.footer?.toString(),
+    };
+    cacheSet(key, result, Date.now() + LYRICS_TTL_MS);
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // youtubei.js lanza "La letra no está disponible" / "Lyrics not available" cuando no hay letra.
+    if (/no est[aá] disponible|not available/i.test(message)) {
+      cacheSet(key, 'miss', Date.now() + LYRICS_MISS_TTL_MS);
+    } else {
+      console.warn(`[innertube:lyrics] getLyrics falló para ${song.id}: ${message}`);
+      await handlePotentialProxyFailure(err);
+    }
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Perfil de artista (vía YouTube Music, no la búsqueda de video normal)
 // ─────────────────────────────────────────────────────────────────────────
 

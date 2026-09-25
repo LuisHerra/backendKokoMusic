@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { streamRouter } from './routes/stream.js';
 import { searchRouter } from './routes/search.js';
 import { artistRouter } from './routes/artist.js';
+import { lyricsRouter } from './routes/lyrics.js';
 import { cacheStats } from './services/cache.js';
 import { getSessionInfo } from './services/innertubeService.js';
 
@@ -68,6 +69,7 @@ app.get('/api/session', async (_req, res) => {
 app.use('/api/stream', streamRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/artist', artistRouter);
+app.use('/api/lyrics', lyricsRouter);
 
 app.listen(PORT, () => {
   console.log(`KokoMusic-lite (solo InnerTube, sin yt-dlp) escuchando en :${PORT}`);
