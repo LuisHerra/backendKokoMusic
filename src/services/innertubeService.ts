@@ -158,6 +158,17 @@ class BotCheckError extends Error {
   }
 }
 
+/**
+ * "This content isn't available" / "Este contenido no está disponible" es el
+ * mensaje que da YouTube cuando LIMITA la sesión por exceso de peticiones (lo
+ * documenta yt-dlp) — distinto de "Video unavailable" / "El vídeo no está
+ * disponible", que sí es un vídeo retirado o bloqueado. Visto en producción
+ * con Despacito, que obviamente existe.
+ */
+function isRateLimitReason(reason?: string): boolean {
+  return !!reason && /este contenido no est[aá] disponible|this content isn.?t available/i.test(reason);
+}
+
 function isBlockError(err: unknown): boolean {
   if (err instanceof BotCheckError) return true;
   const message = err instanceof Error ? err.message : String(err);
@@ -414,11 +425,12 @@ function extractExpiryMs(url: string): number {
 }
 
 /**
- * Máximo de escalados (quitar cookie / rotar proxy) por petición. Acotado
- * para no pasar del timeout de 15s del backend principal: con la detección
- * temprana de bloqueo cada intento fallido cuesta ~1-2s.
+ * Máximo de escalados (quitar cookie / rotar proxy) por petición. Cada uno
+ * recrea sesión + PoToken (~5-10s); con 2 se vieron 27s en producción, por
+ * encima del timeout de 15s del backend principal. Las siguientes peticiones
+ * ya usan el proxy nuevo.
  */
-const MAX_BLOCK_RECOVERIES = 3;
+const MAX_BLOCK_RECOVERIES = 1;
 
 /** Si los N primeros clientes dan 403, es un bloqueo de sesión/IP, no del vídeo — no gastar tiempo en el resto. */
 const EARLY_BLOCK_THRESHOLD = 2;
@@ -460,8 +472,8 @@ async function resolveAudioStreamOnce(
       // La verificación antibots llega como LOGIN_REQUIRED sin streamingData;
       // sin esto solo veíamos "Streaming data not available" y no rotábamos.
       const playability = (info as { playability_status?: { status?: string; reason?: string } }).playability_status;
-      if (playability?.status === 'LOGIN_REQUIRED') {
-        throw new BotCheckError(playability.status, playability.reason);
+      if (playability?.status === 'LOGIN_REQUIRED' || isRateLimitReason(playability?.reason)) {
+        throw new BotCheckError(playability?.status ?? 'UNKNOWN', playability?.reason);
       }
 
       const format = info.chooseFormat({
