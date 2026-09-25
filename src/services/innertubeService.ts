@@ -169,10 +169,38 @@ function isRateLimitReason(reason?: string): boolean {
   return !!reason && /este contenido no est[aá] disponible|this content isn.?t available/i.test(reason);
 }
 
-function isBlockError(err: unknown): boolean {
-  if (err instanceof BotCheckError) return true;
+/**
+ * - 'account': YouTube limita la SESIÓN (cookie) por exceso de peticiones —
+ *   pasa en cualquier proxy, rotar no sirve; hay que quitar la cookie.
+ * - 'ip': 403 / verificación antibots — es la IP del proxy; rotar sí sirve.
+ * - 'neutral': no dice nada del bloqueo (IOS/ANDROID dan 400 siempre desde
+ *   hace tiempo; "El vídeo no está disponible" y "Streaming data not
+ *   available" los da YTMUSIC también cuando la sesión está limitada, así que
+ *   por sí solos no prueban nada).
+ * - 'video': fallo propio del vídeo u otro error.
+ */
+type FailureKind = 'account' | 'ip' | 'neutral' | 'video';
+
+function classifyFailure(err: unknown): FailureKind {
   const message = err instanceof Error ? err.message : String(err);
-  return /status code 403/.test(message);
+  if (isRateLimitReason(message)) return 'account';
+  if (/status code 403/.test(message) || /Playability LOGIN_REQUIRED/.test(message)) return 'ip';
+  // "Streaming data not available" (respuesta OK pero sin formatos) también
+  // acompaña al límite de sesión en YTMUSIC — visto en producción junto a
+  // "Este contenido no está disponible" en MWEB/WEB_CREATOR.
+  if (
+    /status code 400/.test(message) ||
+    /Streaming data not available/i.test(message) ||
+    /Playability UNPLAYABLE: (el v[ií]deo no est[aá] disponible|video unavailable)/i.test(message)
+  ) return 'neutral';
+  return 'video';
+}
+
+class PlayabilityError extends Error {
+  constructor(status: string, reason?: string) {
+    super(`Playability ${status}${reason ? `: ${reason}` : ''}`);
+    this.name = 'PlayabilityError';
+  }
 }
 
 function resetSession(): void {
@@ -198,7 +226,7 @@ function recordUnblocked(): void {
  * Devuelve true si el caller debe reintentar (se cambió algo, o otra petición
  * concurrente acaba de hacerlo), false si no queda nada que probar.
  */
-async function recoverFromBlock(context: string): Promise<boolean> {
+async function recoverFromBlock(context: string, kind: 'account' | 'ip'): Promise<boolean> {
   // Varias peticiones concurrentes detectan el mismo bloqueo a la vez — solo
   // la primera escala; el resto reintenta con lo que esa haya cambiado.
   if (Date.now() - lastRecoveryAt < RECOVERY_DEBOUNCE_MS) return true;
@@ -206,7 +234,9 @@ async function recoverFromBlock(context: string): Promise<boolean> {
   blockStreak++;
 
   const canRotate = proxyPool.length > 1;
-  const shouldDropCookie = wantsCookie() && (blockStreak > COOKIE_DISABLE_AFTER_BLOCKS || !canRotate);
+  // Límite de cuenta: la cookie fuera ya (rotar de IP no lo arregla). Bloqueo
+  // de IP: rotar, y solo si se encadenan muchos, sospechar de la cookie.
+  const shouldDropCookie = wantsCookie() && (kind === 'account' || blockStreak > COOKIE_DISABLE_AFTER_BLOCKS || !canRotate);
 
   if (shouldDropCookie) {
     cookieDisabledUntil = Date.now() + COOKIE_DISABLE_MS;
@@ -432,8 +462,6 @@ function extractExpiryMs(url: string): number {
  */
 const MAX_BLOCK_RECOVERIES = 1;
 
-/** Si los N primeros clientes dan 403, es un bloqueo de sesión/IP, no del vídeo — no gastar tiempo en el resto. */
-const EARLY_BLOCK_THRESHOLD = 2;
 
 /**
  * Intenta resolver el stream de audio de un video de YouTube probando
@@ -448,15 +476,15 @@ export async function resolveAudioStream(
     const { result, blocked } = await resolveAudioStreamOnce(videoId);
     if (result) return result;
     if (!blocked || attempt >= MAX_BLOCK_RECOVERIES) return null;
-    if (!(await recoverFromBlock(`resolve(${videoId})`))) return null;
+    if (!(await recoverFromBlock(`resolve(${videoId})`, blocked))) return null;
   }
 }
 
 async function resolveAudioStreamOnce(
   videoId: string
-): Promise<{ result: ResolvedStream | null; blocked: boolean }> {
+): Promise<{ result: ResolvedStream | null; blocked: 'account' | 'ip' | null }> {
   const t0 = performance.now();
-  let forbiddenCount = 0;
+  const failures: FailureKind[] = [];
   const wasAlreadyWarm = innertubeInstance !== null;
   const yt = await getInnertube();
   const tInnertubeReady = performance.now();
@@ -474,6 +502,9 @@ async function resolveAudioStreamOnce(
       const playability = (info as { playability_status?: { status?: string; reason?: string } }).playability_status;
       if (playability?.status === 'LOGIN_REQUIRED' || isRateLimitReason(playability?.reason)) {
         throw new BotCheckError(playability?.status ?? 'UNKNOWN', playability?.reason);
+      }
+      if (playability?.status && playability.status !== 'OK') {
+        throw new PlayabilityError(playability.status, playability.reason);
       }
 
       const format = info.chooseFormat({
@@ -522,26 +553,26 @@ async function resolveAudioStreamOnce(
           client,
           _timing: timing,
         },
-        blocked: false,
+        blocked: null,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[innertube:${client}] falló para ${videoId}: ${message}`);
       await handlePotentialProxyFailure(err);
-      if (isBlockError(err)) {
-        forbiddenCount++;
-        // Los primeros N clientes seguidos con 403 → bloqueo, cortar ya.
-        if (forbiddenCount >= EARLY_BLOCK_THRESHOLD && forbiddenCount === CLIENT_ORDER.indexOf(client) + 1) {
-          logResolution({ videoId, client: null, ms: Math.round(performance.now() - t0), proxyUsed: currentProxyIndex >= 0 });
-          return { result: null, blocked: true };
-        }
-      }
+      failures.push(classifyFailure(err));
       continue;
     }
   }
 
   logResolution({ videoId, client: null, ms: Math.round(performance.now() - t0), proxyUsed: currentProxyIndex >= 0 });
-  return { result: null, blocked: forbiddenCount === CLIENT_ORDER.length };
+  // Bloqueo = hubo alguna señal de bloqueo y ningún fallo atribuible al vídeo.
+  const hasVideoFailure = failures.includes('video');
+  const blocked = hasVideoFailure ? null
+    : failures.includes('account') ? 'account'
+    : failures.includes('ip') ? 'ip'
+    : null;
+  if (blocked) console.warn(`[innertube] ${videoId}: bloqueo de ${blocked === 'account' ? 'cuenta (límite de sesión)' : 'IP'} — ${failures.join(',')}`);
+  return { result: null, blocked };
 }
 
 export interface DiagnoseResult {
@@ -617,7 +648,7 @@ export async function getSessionInfo() {
   };
 }
 
-export async function searchTracks(query: string, allowRecovery = true): Promise<SearchResultItem[]> {
+export async function searchTracks(query: string): Promise<SearchResultItem[]> {
   const yt = await getInnertube();
 
   // Degradar a lista vacía en vez de propagar la excepción — un proxy caído
@@ -630,11 +661,10 @@ export async function searchTracks(query: string, allowRecovery = true): Promise
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[innertube:search] falló para "${query}": ${message}`);
+    // Sin recuperación por bloqueo: /search da 403 desde las IPs del pool
+    // incluso cuando /player funciona perfectamente — rotar aquí nos sacaba de
+    // proxies buenos para el audio (visto en producción).
     await handlePotentialProxyFailure(err);
-    // La búsqueda casi nunca da 403 por el contenido — si lo da, es bloqueo.
-    if (allowRecovery && isBlockError(err) && (await recoverFromBlock('search'))) {
-      return searchTracks(query, false);
-    }
     return [];
   }
 
