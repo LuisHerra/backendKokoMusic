@@ -4,6 +4,8 @@ import {
   diagnoseAudioStream,
   getSessionInfo,
   getProxyPoolStatus,
+  getStreamDispatcher,
+  reportRelayBlocked,
   type ResolvedStream,
 } from '../services/innertubeService.js';
 import { cacheGet, cacheSet, cacheDelete } from '../services/cache.js';
@@ -22,7 +24,17 @@ export const streamRouter = Router();
  * los bytes él mismo, con el `fetch` global que ya está enrutado al proxy
  * activo (ver innertubeService.ts), y reenviarlos.
  */
-async function relayAudioBytes(req: Request, res: Response, resolved: ResolvedStream): Promise<boolean> {
+/** Si googlevideo no manda cabeceras en este tiempo, el proxy está colgado — mejor reintentar que dejar al cliente esperando. */
+const UPSTREAM_HEADERS_TIMEOUT_MS = 10_000;
+
+/**
+ * - 'ok': se reenvió (o se empezó a reenviar) el audio.
+ * - 'blocked': googlevideo rechazó la URL (401/403) — URL vieja o IP vetada.
+ * - 'failed': error de red, 5xx o cuerpo que no es audio.
+ */
+type RelayOutcome = 'ok' | 'blocked' | 'failed';
+
+async function relayAudioBytes(req: Request, res: Response, resolved: ResolvedStream): Promise<RelayOutcome> {
   const requestHeaders: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     // Sin Range, Google throttla brutalmente la descarga (anti-scraping) —
@@ -30,17 +42,29 @@ async function relayAudioBytes(req: Request, res: Response, resolved: ResolvedSt
     'Range': req.headers.range || 'bytes=0-',
   };
 
+  // Por el mismo proxy que resolvió la URL, no por el activo ahora (ver getStreamDispatcher).
+  const dispatcher = await getStreamDispatcher(resolved.proxyIndex ?? -1);
+  const abort = new AbortController();
+  const headersTimer = setTimeout(() => abort.abort(), UPSTREAM_HEADERS_TIMEOUT_MS);
+
   let upstream: Awaited<ReturnType<typeof fetch>>;
   try {
-    upstream = await fetch(resolved.url, { headers: requestHeaders });
+    upstream = await fetch(resolved.url, {
+      headers: requestHeaders,
+      signal: abort.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    } as RequestInit);
   } catch (err) {
     console.error(`[Stream] Error de red reenviando audio: ${err instanceof Error ? err.message : err}`);
-    return false;
+    return 'failed';
+  } finally {
+    clearTimeout(headersTimer);
   }
 
   if (!upstream.ok && upstream.status !== 206) {
-    console.error(`[Stream] Upstream googlevideo devolvió ${upstream.status} al reenviar audio.`);
-    return false;
+    console.error(`[Stream] Upstream googlevideo devolvió ${upstream.status} al reenviar audio (proxy ${(resolved.proxyIndex ?? -1) + 1}).`);
+    upstream.body?.cancel().catch(() => {});
+    return upstream.status === 403 || upstream.status === 401 ? 'blocked' : 'failed';
   }
 
   // Google a veces responde 200 con un cuerpo HTML/JSON (captcha, rate-limit,
@@ -51,7 +75,8 @@ async function relayAudioBytes(req: Request, res: Response, resolved: ResolvedSt
   const ct = upstream.headers.get('content-type');
   if (ct && !ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')) {
     console.error(`[Stream] Upstream devolvió content-type no-audio "${ct}" al reenviar.`);
-    return false;
+    upstream.body?.cancel().catch(() => {});
+    return 'failed';
   }
 
   const responseHeaders: Record<string, string> = {
@@ -69,25 +94,38 @@ async function relayAudioBytes(req: Request, res: Response, resolved: ResolvedSt
 
   if (!upstream.body) {
     res.end();
-    return true;
+    return 'ok';
   }
 
   const reader = upstream.body.getReader();
+  // Cada seek o cambio de canción cierra la conexión del cliente: sin esto el
+  // bucle se quedaba esperando un 'drain' que nunca llega y la descarga desde
+  // googlevideo seguía abierta por el proxy (tráfico y conexiones acumulados).
+  let clientGone = false;
+  const onClose = () => {
+    clientGone = true;
+    reader.cancel().catch(() => {});
+  };
+  res.once('close', onClose);
   try {
-    while (true) {
+    while (!clientGone) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!res.write(value)) {
-        await new Promise((resolve) => res.once('drain', resolve));
+        await new Promise((resolve) => {
+          res.once('drain', resolve);
+          res.once('close', resolve);
+        });
       }
     }
   } catch (err) {
+    if (clientGone) return 'ok';
     console.error(`[Stream] Error de red a mitad de reenvío: ${err instanceof Error ? err.message : err}`);
     if (!res.writableEnded) res.end();
-    return true; // ya se enviaron cabeceras + parte del cuerpo, no se puede reintentar
+    return 'ok'; // ya se enviaron cabeceras + parte del cuerpo, no se puede reintentar
   }
   res.end();
-  return true;
+  return 'ok';
 }
 
 /**
@@ -190,10 +228,12 @@ streamRouter.get('/:videoId', async (req, res) => {
   const { videoId } = req.params;
 
   let resolved = cacheGet<ResolvedStream>(videoId);
+  let resolvedFresh = false;
 
   if (!resolved) {
     try {
       resolved = await resolveAudioStream(videoId);
+      resolvedFresh = true;
     } catch (err) {
       console.error('[stream] error inesperado:', err);
       return res.status(500).json({ error: 'Error interno resolviendo el stream.' });
@@ -211,23 +251,34 @@ streamRouter.get('/:videoId', async (req, res) => {
     });
   }
 
-  let relayed = await relayAudioBytes(req, res, resolved);
+  let outcome = await relayAudioBytes(req, res, resolved);
 
-  if (!relayed && !res.headersSent) {
-    console.warn(`[stream] Reenvío falló para ${videoId} — purgando caché y reintentando con resolución fresca.`);
+  // Hasta 2 reintentos: el primero con resolución fresca (URL cacheada vieja o
+  // de antes de una rotación); si una URL RECIÉN resuelta también da 403, la
+  // IP del proxy está vetada en googlevideo aunque /player responda bien →
+  // rotar de proxy antes del último intento.
+  for (let retry = 0; outcome !== 'ok' && !res.headersSent && retry < 2; retry++) {
     cacheDelete(videoId);
+    if (outcome === 'blocked' && resolvedFresh) {
+      console.warn(`[stream] URL recién resuelta de ${videoId} rechazada por googlevideo — tratándolo como bloqueo del proxy ${resolved.proxyIndex + 1}.`);
+      if (!(await reportRelayBlocked(videoId, resolved.proxyIndex))) break;
+    } else {
+      console.warn(`[stream] Reenvío falló para ${videoId} (${outcome}) — purgando caché y reintentando con resolución fresca.`);
+    }
+    let fresh: ResolvedStream | null = null;
     try {
-      resolved = await resolveAudioStream(videoId);
-    } catch (err) {
-      resolved = null;
+      fresh = await resolveAudioStream(videoId);
+    } catch {
+      fresh = null;
     }
-    if (resolved) {
-      cacheSet(videoId, resolved, resolved.expiresAt);
-      relayed = await relayAudioBytes(req, res, resolved);
-    }
+    if (!fresh) break;
+    resolved = fresh;
+    resolvedFresh = true;
+    cacheSet(videoId, resolved, resolved.expiresAt);
+    outcome = await relayAudioBytes(req, res, resolved);
   }
 
-  if (!relayed && !res.headersSent) {
+  if (outcome !== 'ok' && !res.headersSent) {
     return res.status(502).json({ error: 'No se pudo reenviar el stream de audio.', videoId });
   }
 });

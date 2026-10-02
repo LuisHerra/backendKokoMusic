@@ -1,4 +1,5 @@
 import { Innertube, Platform } from 'youtubei.js';
+import type { Dispatcher } from 'undici';
 import type { Types } from 'youtubei.js';
 import { cacheGet, cacheSet } from './cache.js';
 import { logResolution } from './resolutionStats.js';
@@ -59,14 +60,30 @@ function loadProxyPool(): string[] {
 const proxyPool = loadProxyPool();
 let currentProxyIndex = -1; // -1 = sin proxy activo todavía
 
+/** Un ProxyAgent por proxy, reutilizado: antes se creaba uno nuevo en cada
+ * rotación (los viejos quedaban con sus sockets abiertos), y además el
+ * reenvío de audio necesita el agente de un proxy concreto (ver
+ * getStreamDispatcher). */
+const proxyAgents = new Map<number, Dispatcher>();
+
+async function getProxyAgent(index: number): Promise<Dispatcher> {
+  let agent = proxyAgents.get(index);
+  if (!agent) {
+    const { ProxyAgent } = await import('undici');
+    agent = new ProxyAgent(proxyPool[index]);
+    proxyAgents.set(index, agent);
+  }
+  return agent;
+}
+
 /** Aplica el proxy en `index` como dispatcher global. No mezclamos el fetch
  * de `undici` con los Request nativos de youtubei.js (da "Failed to parse
  * URL from [object Request]") — en vez de eso mutamos el dispatcher GLOBAL,
  * que el fetch nativo de Node ya respeta sin más cambios. */
 async function applyProxyAt(index: number): Promise<boolean> {
   if (index < 0 || index >= proxyPool.length) return false;
-  const { ProxyAgent, setGlobalDispatcher } = await import('undici');
-  setGlobalDispatcher(new ProxyAgent(proxyPool[index]));
+  const { setGlobalDispatcher } = await import('undici');
+  setGlobalDispatcher(await getProxyAgent(index));
   currentProxyIndex = index;
   console.log(`[Innertube] Usando proxy ${index + 1}/${proxyPool.length} del pool.`);
   return true;
@@ -100,6 +117,36 @@ async function handlePotentialProxyFailure(err: unknown): Promise<void> {
   }
 }
 
+/**
+ * La URL de googlevideo queda firmada con la IP que la pidió (`ip=`), así que
+ * el reenvío de bytes tiene que salir por EL MISMO proxy que resolvió, no por
+ * el que esté activo ahora: si entre medias otra petición rotó el pool (o la
+ * URL viene de caché de antes de una rotación), el dispatcher global ya
+ * apunta a otra IP y googlevideo responde 403.
+ */
+export async function getStreamDispatcher(proxyIndex: number): Promise<Dispatcher | undefined> {
+  if (proxyIndex < 0 || proxyIndex >= proxyPool.length) return undefined;
+  return getProxyAgent(proxyIndex);
+}
+
+/** 403 de googlevideo por proxy — el /player puede seguir respondiendo bien desde una IP ya vetada para descargar audio. */
+const relayBlocksByProxy = new Map<number, number>();
+
+/**
+ * El reenvío de audio recibió 403 de googlevideo con una URL recién resuelta.
+ * resolveAudioStream no lo ve (el /player responde OK), así que antes nunca
+ * se rotaba: cada petición re-resolvía con el mismo proxy vetado y volvía a
+ * fallar. Devuelve true si merece la pena re-resolver y reintentar.
+ */
+export async function reportRelayBlocked(videoId: string, proxyIndex: number): Promise<boolean> {
+  relayBlocksByProxy.set(proxyIndex, (relayBlocksByProxy.get(proxyIndex) ?? 0) + 1);
+  // Si otra petición ya rotó desde que se resolvió esta URL, basta con re-resolver.
+  if (proxyIndex !== currentProxyIndex) return true;
+  // Sin otro proxy al que saltar no hay nada que probar (y quitar la cookie no arregla un veto de IP en googlevideo).
+  if (proxyPool.length < 2) return false;
+  return recoverFromBlock(`relay(${videoId})`, 'ip');
+}
+
 export function getProxyPoolStatus() {
   return {
     poolSize: proxyPool.length,
@@ -108,6 +155,7 @@ export function getProxyPoolStatus() {
     cookieDisabled: isCookieDisabled(),
     cookieDisabledUntil: isCookieDisabled() ? cookieDisabledUntil : null,
     blockStreak,
+    relayBlocksByProxy: Object.fromEntries(relayBlocksByProxy),
   };
 }
 
@@ -270,6 +318,8 @@ export interface ResolvedStream {
   expiresAt: number; // Unix ms, extraído del parámetro `expire=` de la URL
   source: 'innertube';
   client: string; // qué cliente InnerTube resolvió (para depuración/métricas)
+  /** Proxy del pool por el que se pidió (-1 = directo). La URL solo vale desde esa IP. */
+  proxyIndex: number;
   /**
    * Desglose de tiempos en ms — TEMPORAL, para diagnosticar si la lentitud
    * viene de la espera de red a YouTube o del descifrado (CPU). No es parte
@@ -419,21 +469,27 @@ function withTimeout<T>(promise: Promise<T>, client: string): Promise<T> {
 }
 
 /**
- * Adjunta un PoToken atado a `videoId` a la sesión ANTES de pedir
- * getBasicInfo() — sin esto YouTube responde "OK" pero sin `streamingData`
- * en absoluto para prácticamente cualquier canción actual (ver comentario en
- * poTokenService.ts). Se aplica tanto a `session.po_token` (va en el cuerpo
- * de la petición del player, es lo que desbloquea streamingData) como a
- * `session.player.po_token` (se usa al descifrar la URL final, evita
- * throttling/403 de googlevideo). Si falla, seguimos sin PoToken en vez de
- * abortar — algunos vídeos aún resuelven sin él.
+ * PoToken atado a `videoId` — sin él YouTube responde "OK" pero sin
+ * `streamingData` para prácticamente cualquier canción actual (ver
+ * poTokenService.ts), y googlevideo throttlea o da 403 sin `pot=` en la URL.
+ *
+ * Se pasa POR PETICIÓN (opción `po_token` de getBasicInfo + `pot=` añadido a
+ * mano tras descifrar) en vez de asignarlo a `session.po_token` /
+ * `session.player.po_token`: esos objetos los comparten todas las peticiones
+ * concurrentes, y youtubei.js lee `player.po_token` DESPUÉS de un await dentro
+ * de decipher(). Con dos usuarios a la vez, la URL de un vídeo salía con el
+ * `pot` de otro → 403 de googlevideo al reenviar.
  */
-async function attachPoToken(yt: Innertube, videoId: string): Promise<void> {
-  const poToken = await getPoToken(yt, videoId);
-  if (!poToken) return;
-  yt.session.po_token = poToken;
-  if (yt.session.player) {
-    yt.session.player.po_token = poToken;
+function applyPoToken(url: string, poToken: string | null): string {
+  if (!poToken) return url;
+  try {
+    const parsed = new URL(url);
+    // Igual que youtubei.js: en SABR el PoToken va en el cuerpo, no en la URL.
+    if (parsed.searchParams.get('sabr') === '1') return url;
+    parsed.searchParams.set('pot', poToken);
+    return parsed.toString();
+  } catch {
+    return url;
   }
 }
 
@@ -468,7 +524,22 @@ const MAX_BLOCK_RECOVERIES = 1;
  * varios clientes InnerTube en orden hasta que uno funcione.
  * Devuelve null si todos fallan (candidato a fallback en la arquitectura híbrida).
  */
-export async function resolveAudioStream(
+/** Resoluciones en curso por vídeo: el navegador, el prewarm y los reintentos
+ * piden a menudo el mismo vídeo a la vez — con una sola petición a YouTube
+ * basta (menos tráfico por proxy = menos baneos). */
+const inflightResolutions = new Map<string, Promise<ResolvedStream | null>>();
+
+export function resolveAudioStream(videoId: string): Promise<ResolvedStream | null> {
+  const inflight = inflightResolutions.get(videoId);
+  if (inflight) return inflight;
+  const promise = resolveAudioStreamWithRecovery(videoId).finally(() => {
+    inflightResolutions.delete(videoId);
+  });
+  inflightResolutions.set(videoId, promise);
+  return promise;
+}
+
+async function resolveAudioStreamWithRecovery(
   videoId: string
 ): Promise<ResolvedStream | null> {
   syncSessionCookieState();
@@ -489,12 +560,14 @@ async function resolveAudioStreamOnce(
   const yt = await getInnertube();
   const tInnertubeReady = performance.now();
 
-  await attachPoToken(yt, videoId);
+  const poToken = await getPoToken(yt, videoId);
 
   for (const client of CLIENT_ORDER) {
     try {
       const tClientStart = performance.now();
-      const info = await withTimeout(yt.getBasicInfo(videoId, { client }), client);
+      const info = await withTimeout(yt.getBasicInfo(videoId, { client, po_token: poToken ?? undefined }), client);
+      // YouTube firma la URL con la IP del proxy por el que salió esta petición.
+      const proxyIndex = currentProxyIndex;
       const tInfo = performance.now();
 
       // La verificación antibots llega como LOGIN_REQUIRED sin streamingData;
@@ -518,13 +591,14 @@ async function resolveAudioStreamOnce(
       }
 
       // decipher() es async en youtubei.js 17.x
-      const url = await withTimeout(format.decipher(yt.session.player), client);
+      const deciphered = await withTimeout(format.decipher(yt.session.player), client);
       const tDecipher = performance.now();
 
-      if (!url) {
+      if (!deciphered) {
         console.warn(`[innertube:${client}] no se pudo descifrar URL para ${videoId}`);
         continue;
       }
+      const url = applyPoToken(deciphered, poToken);
 
       const timing = {
         innertubeReadyMs: wasAlreadyWarm ? 0 : Math.round(tInnertubeReady - t0),
@@ -551,6 +625,7 @@ async function resolveAudioStreamOnce(
           expiresAt: extractExpiryMs(url),
           source: 'innertube',
           client,
+          proxyIndex,
           _timing: timing,
         },
         blocked: null,
@@ -593,12 +668,12 @@ export interface DiagnoseResult {
  */
 export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResult[]> {
   const yt = await getInnertube();
-  await attachPoToken(yt, videoId);
+  const poToken = await getPoToken(yt, videoId);
   const results: DiagnoseResult[] = [];
 
   for (const client of CLIENT_ORDER) {
     try {
-      const info = await withTimeout(yt.getBasicInfo(videoId, { client }), client);
+      const info = await withTimeout(yt.getBasicInfo(videoId, { client, po_token: poToken ?? undefined }), client);
       const playability = (info as { playability_status?: { status?: string; reason?: string } }).playability_status;
       if (playability?.status && playability.status !== 'OK') {
         results.push({ client, success: false, error: `Playability ${playability.status}${playability.reason ? `: ${playability.reason}` : ''}` });
