@@ -101,21 +101,28 @@ async function relayAudioBytes(req: Request, res: Response, resolved: ResolvedSt
   // Cada seek o cambio de canción cierra la conexión del cliente: sin esto el
   // bucle se quedaba esperando un 'drain' que nunca llega y la descarga desde
   // googlevideo seguía abierta por el proxy (tráfico y conexiones acumulados).
+  // Un solo listener de 'close' para todo el reenvío: añadir uno por cada
+  // espera de 'drain' los acumulaba (MaxListenersExceededWarning).
   let clientGone = false;
-  const onClose = () => {
+  let wakeFromDrain: (() => void) | null = null;
+  res.once('close', () => {
     clientGone = true;
     reader.cancel().catch(() => {});
-  };
-  res.once('close', onClose);
+    wakeFromDrain?.();
+  });
   try {
     while (!clientGone) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (!res.write(value)) {
-        await new Promise((resolve) => {
+      if (!res.write(value) && !clientGone) {
+        let onDrain: () => void = () => {};
+        await new Promise<void>((resolve) => {
+          onDrain = resolve;
+          wakeFromDrain = resolve;
           res.once('drain', resolve);
-          res.once('close', resolve);
         });
+        wakeFromDrain = null;
+        res.off('drain', onDrain);
       }
     }
   } catch (err) {

@@ -73,11 +73,15 @@ function ensureBotGuardDom(): void {
 
 interface MinterBundle {
   minter: WebPoMinter;
+  /** A partir de aquí se regenera en segundo plano. */
   expiresAt: number;
+  /** A partir de aquí el integrity token ya no vale: hay que esperar al nuevo. */
+  hardExpiresAt: number;
 }
 
 let cachedMinter: MinterBundle | null = null;
 let mintingPromise: Promise<MinterBundle> | null = null;
+let minterGeneration = 0;
 
 /**
  * Descarga el intérprete de BotGuard cuando el challenge de InnerTube solo
@@ -113,6 +117,7 @@ async function resolveInterpreterJavascript(bgChallenge: NonNullable<Awaited<Ret
  * archivo (issue #48 de BgUtils, clientes migrados a solo-SABR como MWEB).
  */
 async function createMinter(yt: Innertube): Promise<MinterBundle> {
+  const t0 = performance.now();
   ensureBotGuardDom();
 
   const challengeResponse = await yt.getAttestationChallenge('ENGAGEMENT_TYPE_UNBOUND');
@@ -156,32 +161,54 @@ async function createMinter(yt: Innertube): Promise<MinterBundle> {
 
   const minter = await WebPoMinter.create({ integrityToken, estimatedTtlSecs, mintRefreshThreshold }, webPoSignalOutput);
 
-  const ttlSecs = mintRefreshThreshold || estimatedTtlSecs || FALLBACK_TTL_SECS;
-  const expiresAt = Date.now() + Math.max(ttlSecs * 1000 - REFRESH_MARGIN_MS, 5 * 60 * 1000);
+  // `mintRefreshThreshold` son los segundos ANTES de caducar en los que
+  // conviene refrescar, no la vida del token: usarlo como TTL hacía
+  // regenerar el minter cada 5 min (con TTL real de ~12h), y cada
+  // regeneración por proxy puede tardar casi un minuto.
+  const ttlMs = (estimatedTtlSecs || FALLBACK_TTL_SECS) * 1000;
+  const marginMs = Math.max((mintRefreshThreshold || 0) * 1000, REFRESH_MARGIN_MS);
+  const now = Date.now();
+  const expiresAt = now + Math.max(ttlMs - marginMs, 5 * 60 * 1000);
+  const hardExpiresAt = now + ttlMs;
 
   console.log(
-    `[PoToken] Minter de BotGuard generado (TTL≈${estimatedTtlSecs}s, ` +
-    `refresco en ${Math.round((expiresAt - Date.now()) / 60000)} min).`
+    `[PoToken] Minter de BotGuard generado en ${Math.round(performance.now() - t0)}ms (TTL≈${estimatedTtlSecs}s, ` +
+    `refresco en ${Math.round((expiresAt - now) / 60000)} min).`
   );
 
-  return { minter, expiresAt };
+  return { minter, expiresAt, hardExpiresAt };
+}
+
+function startMinting(yt: Innertube): Promise<MinterBundle> {
+  if (!mintingPromise) {
+    const generation = minterGeneration;
+    const promise: Promise<MinterBundle> = createMinter(yt)
+      .then((bundle) => {
+        if (generation === minterGeneration) cachedMinter = bundle;
+        return bundle;
+      })
+      .finally(() => {
+        if (mintingPromise === promise) mintingPromise = null;
+      });
+    mintingPromise = promise;
+  }
+  return mintingPromise;
 }
 
 async function ensureMinter(yt: Innertube): Promise<WebPoMinter> {
-  if (cachedMinter && Date.now() < cachedMinter.expiresAt) {
+  const now = Date.now();
+  if (cachedMinter && now < cachedMinter.expiresAt) {
     return cachedMinter.minter;
   }
-  if (mintingPromise) {
-    return (await mintingPromise).minter;
-  }
-
-  mintingPromise = createMinter(yt);
-  try {
-    cachedMinter = await mintingPromise;
+  // Toca refrescar pero el token aún vale: se regenera en segundo plano y esta
+  // petición sigue con el actual, en vez de hacer esperar al usuario.
+  if (cachedMinter && now < cachedMinter.hardExpiresAt) {
+    startMinting(yt).catch((err) => {
+      console.error('[PoToken] Refresco en segundo plano falló:', err instanceof Error ? err.message : err);
+    });
     return cachedMinter.minter;
-  } finally {
-    mintingPromise = null;
   }
+  return (await startMinting(yt)).minter;
 }
 
 /**
@@ -191,6 +218,9 @@ async function ensureMinter(yt: Innertube): Promise<WebPoMinter> {
  */
 export function resetPoTokenMinter(): void {
   cachedMinter = null;
+  // Un minter que se esté generando con la sesión/IP anterior no debe quedar guardado.
+  minterGeneration++;
+  mintingPromise = null;
 }
 
 /**

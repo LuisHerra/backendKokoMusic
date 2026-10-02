@@ -5,7 +5,7 @@ import { searchRouter } from './routes/search.js';
 import { artistRouter } from './routes/artist.js';
 import { lyricsRouter } from './routes/lyrics.js';
 import { cacheStats } from './services/cache.js';
-import { getSessionInfo } from './services/innertubeService.js';
+import { getSessionInfo, warmUp } from './services/innertubeService.js';
 
 const app = express();
 
@@ -73,4 +73,5 @@ app.use('/api/lyrics', lyricsRouter);
 
 app.listen(PORT, () => {
   console.log(`KokoMusic-lite (solo InnerTube, sin yt-dlp) escuchando en :${PORT}`);
+  void warmUp();
 });

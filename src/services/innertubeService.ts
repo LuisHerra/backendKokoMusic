@@ -327,6 +327,7 @@ export interface ResolvedStream {
    */
   _timing?: {
     innertubeReadyMs: number; // cuánto tardó tener la sesión InnerTube lista (0 si ya estaba caliente)
+    poTokenMs: number; // generar el PoToken (incluye crear el minter de BotGuard si no había uno válido)
     getBasicInfoMs: number; // la llamada de red a InnerTube en sí
     decipherMs: number; // ejecución de la JS ofuscada (CPU) — 0 si el cliente no la necesitó
     totalMs: number;
@@ -561,6 +562,7 @@ async function resolveAudioStreamOnce(
   const tInnertubeReady = performance.now();
 
   const poToken = await getPoToken(yt, videoId);
+  const tPoToken = performance.now();
 
   for (const client of CLIENT_ORDER) {
     try {
@@ -602,6 +604,7 @@ async function resolveAudioStreamOnce(
 
       const timing = {
         innertubeReadyMs: wasAlreadyWarm ? 0 : Math.round(tInnertubeReady - t0),
+        poTokenMs: Math.round(tPoToken - tInnertubeReady),
         getBasicInfoMs: Math.round(tInfo - tClientStart),
         decipherMs: Math.round(tDecipher - tInfo),
         totalMs: Math.round(tDecipher - t0),
@@ -609,7 +612,7 @@ async function resolveAudioStreamOnce(
 
       console.log(
         `[timing] resolveAudioStream(${videoId}, ${client}): ` +
-          `innertubeReady=${timing.innertubeReadyMs}ms getBasicInfo=${timing.getBasicInfoMs}ms ` +
+          `innertubeReady=${timing.innertubeReadyMs}ms poToken=${timing.poTokenMs}ms getBasicInfo=${timing.getBasicInfoMs}ms ` +
           `decipher=${timing.decipherMs}ms total=${timing.totalMs}ms`
       );
 
@@ -706,6 +709,23 @@ export async function diagnoseAudioStream(videoId: string): Promise<DiagnoseResu
   }
 
   return results;
+}
+
+/**
+ * Crea la sesión InnerTube y el minter de BotGuard al arrancar, en vez de en
+ * la primera canción que pida un usuario: por proxy, las dos cosas juntas se
+ * han visto tardar ~85s. El videoId da igual — lo caro es el minter, que
+ * luego mintea para cualquier vídeo sin red.
+ */
+export async function warmUp(): Promise<void> {
+  const t0 = performance.now();
+  try {
+    const yt = await getInnertube();
+    await getPoToken(yt, 'dQw4w9WgXcQ');
+    console.log(`[Innertube] Precalentamiento listo en ${Math.round(performance.now() - t0)}ms.`);
+  } catch (err) {
+    console.warn('[Innertube] Precalentamiento falló (se reintentará en la primera petición):', err instanceof Error ? err.message : err);
+  }
 }
 
 /**
