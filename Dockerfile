@@ -2,6 +2,10 @@ FROM node:20-slim
 
 WORKDIR /app
 
+# ffmpeg: transcodea a Opus los tracks que se suben a R2 (POST /api/cdn-cache)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Instalar dependencias (incluye devDependencies para poder compilar TS)
 COPY package.json package-lock.json* ./
 RUN npm install
