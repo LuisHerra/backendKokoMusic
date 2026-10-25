@@ -34,4 +34,10 @@ jobs:
           fi
 
           echo "Fuera de la ventana de sueño (hora actual $HOUR_MADRID:$MIN_MADRID Madrid) — pingueando."
-          curl -sf https://backendkokomusic.onrender.com/health
+          # Principal + respaldo (otra cuenta de Render). Uno suspendido o
+          # caído no hace fallar el job; solo falla si no responde ninguno.
+          OK=0
+          for URL in https://backendkokomusic.onrender.com https://backendkokomusic-zkzj.onrender.com; do
+            if curl -sf -m 90 "$URL/health" > /dev/null; then echo "OK   $URL"; OK=1; else echo "FAIL $URL"; fi
+          done
+          [ "$OK" = 1 ]
